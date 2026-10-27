@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 from moviecheck.cache import MovieCache
 from moviecheck.inputs import extract_listing_names, load_queries, parse_filename, suggested_report_path
 from moviecheck.models import MovieData, MovieQuery, MovieResult
-from moviecheck.providers import ProviderError, WebProvider, match_score, normalized_title, parse_movie_page, search_title_variants, validate_movie_url
+from moviecheck.providers import ProviderError, WebProvider, image_url, match_score, normalized_title, parse_movie_page, search_title_variants, validate_movie_url
 from moviecheck.report import write_report
 from moviecheck.service import MovieService
 
@@ -144,11 +144,29 @@ class ProviderTests(unittest.TestCase):
         <h2 class="filmCoverSection__originalTitle">Inception <span>2010</span></h2>
         <div class="filmCoverSection__year">2010</div>
         <div itemprop="aggregateRating"><span itemprop="ratingValue">8,2</span><span itemprop="bestRating">10</span></div>
-        <span itemprop="description">Opis testowy.</span><span itemprop="genre">Sci-Fi</span>'''
+        <span itemprop="description">Opis testowy.</span><span itemprop="genre">Sci-Fi</span>
+        <meta property="og:image" content="https://fwcdn.pl/poster.jpg">'''
         movie = parse_movie_page(html, "https://www.filmweb.pl/film/Incepcja-2010-500891", "Filmweb")
         self.assertEqual((movie.title, movie.original_title, movie.year, movie.rating), ("Incepcja", "Inception", 2010, "8,2"))
         self.assertEqual(movie.genres, ["Sci-Fi"])
         self.assertEqual(movie.description, "Opis testowy.")
+        self.assertEqual(movie.poster_url, "https://fwcdn.pl/poster.jpg")
+
+    def test_json_ld_poster_formats_and_metadata_fallback(self):
+        for image in ("https://m.media-amazon.com/poster.jpg", {"url": "https://m.media-amazon.com/poster.jpg"}, [{"contentUrl": "https://m.media-amazon.com/poster.jpg"}]):
+            with self.subTest(image=image):
+                data = {"@type": "Movie", "name": "Film", "image": image}
+                html = '<script type="application/ld+json">' + json.dumps(data) + '</script>'
+                movie = parse_movie_page(html, "https://www.imdb.com/title/tt1", "IMDb")
+                self.assertEqual(movie.poster_url, "https://m.media-amazon.com/poster.jpg")
+        html = '<meta property="og:image" content="https://m.media-amazon.com/fallback.jpg"><script type="application/ld+json">{"@type":"Movie","name":"Film"}</script>'
+        self.assertEqual(parse_movie_page(html, "https://www.imdb.com/title/tt1", "IMDb").poster_url, "https://m.media-amazon.com/fallback.jpg")
+
+    def test_poster_urls_only_allow_https_images(self):
+        self.assertEqual(image_url("//fwcdn.pl/poster.jpg", "https://www.filmweb.pl/film/Film-2000-1"), "https://fwcdn.pl/poster.jpg")
+        for value in ("javascript:alert(1)", "data:image/svg+xml,test", "file:///tmp/poster.jpg", "http://example.com/poster.jpg", "https://user:secret@example.com/poster.jpg", "https://example.com:bad/image"):
+            with self.subTest(value=value):
+                self.assertEqual(image_url(value), "")
 
     def test_json_ld_graph(self):
         data = {"@graph": [{"@type": "WebPage"}, {"@type": "Movie", "name": "Incepcja", "alternateName": "Inception",
@@ -241,6 +259,51 @@ class ServiceTests(unittest.TestCase):
 
 
 class ReportAndCacheTests(unittest.TestCase):
+    def test_report_has_linked_poster_and_falls_back_to_second_source(self):
+        from bs4 import BeautifulSoup
+
+        with tempfile.TemporaryDirectory() as directory:
+            movie = MovieData("Film", "https://www.filmweb.pl/film/Film-2000-1", "Filmweb", description="Opis filmu.")
+            imdb = MovieData("Movie", "https://www.imdb.com/title/tt1", "IMDb", poster_url="https://m.media-amazon.com/poster.jpg?a=1&b=2")
+            result = MovieResult(MovieQuery("Film.mkv", "Film"), [movie, imdb])
+            path = Path(directory) / "report.html"
+            write_report(path, Path("lista.txt"), [result, MovieResult(MovieQuery("Unknown.mkv", "Unknown"))])
+            soup = BeautifulSoup(path.read_text(encoding="utf-8"), "html.parser")
+            posters = soup.select(".poster-link")
+            self.assertEqual(len(posters), 1)
+            self.assertEqual(posters[0]["href"], imdb.url)
+            self.assertEqual(posters[0].img["src"], imdb.poster_url)
+            self.assertIn("Opis filmu.", soup.select_one(".movie-content").get_text())
+            nonce = soup.find("script")["nonce"]
+            self.assertIn("'nonce-" + nonce + "'", soup.find("meta", attrs={"http-equiv": "Content-Security-Policy"})["content"])
+
+    def test_report_omits_unsafe_poster_url(self):
+        with tempfile.TemporaryDirectory() as directory:
+            movie = MovieData("Film", "https://www.imdb.com/title/tt1", "IMDb", poster_url="javascript:alert(1)")
+            path = Path(directory) / "report.html"
+            write_report(path, Path("lista.txt"), [MovieResult(MovieQuery("Film.mkv", "Film"), [movie])])
+            self.assertNotIn('<img src="javascript:', path.read_text(encoding="utf-8"))
+
+    def test_old_cached_movie_refreshes_poster_and_retains_data_on_network_error(self):
+        with tempfile.TemporaryDirectory() as directory:
+            cache = MovieCache(Path(directory) / "cache.sqlite3")
+            url = "https://www.imdb.com/title/tt1"
+            old_data = {"title": "Film", "url": url, "source": "IMDb", "description": "Zapisany opis."}
+            cache.put(url, old_data)
+            provider = WebProvider("IMDb", cache)
+            try:
+                with patch.object(provider, "fetch", side_effect=ProviderError("HTTP 202")):
+                    self.assertEqual(provider.get_movie(url).description, "Zapisany opis.")
+                html = '<script type="application/ld+json">{"@type":"Movie","name":"Film","image":"https://m.media-amazon.com/poster.jpg"}</script>'
+                with patch.object(provider, "fetch", return_value=html) as fetch:
+                    self.assertEqual(provider.get_movie(url).poster_url, "https://m.media-amazon.com/poster.jpg")
+                    provider.get_movie(url)
+                    fetch.assert_called_once()
+                self.assertIn("poster_url", cache.get(url))
+            finally:
+                provider.close()
+                cache.close()
+
     def test_report_escapes_untrusted_text_and_marks_partial(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "raport.html"

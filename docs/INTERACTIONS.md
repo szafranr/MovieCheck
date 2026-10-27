@@ -1,5 +1,30 @@
 # Dziennik interakcji i prac
 
+## 2026-10-27 — Okładki po lewej stronie raportu
+
+### Polecenie użytkownika
+
+> dodaj jeszcze okładkę filmu z lewej strony, obrazek jako link.
+> okładka wysokości całego wiersza, szerokość dopasowana do źródła, tytuł i tekst od okładki
+
+### Wykonane zmiany
+
+- Przed analizą kodu użyto CodeGraph do odczytu modeli, parserów dostawców, generatora raportu i testów; następnie odczytano szablon HTML i aktualną dokumentację.
+- Do `MovieData` dodano opcjonalny `poster_url`. Filmweb pobiera adres z Open Graph lub mikrodanych obrazu, a IMDb/JSON-LD obsługuje adres tekstowy, obiekt ImageObject i listę obrazów oraz zapasowo Open Graph.
+- Adresy plakatów są sprawdzane i ograniczone do HTTPS. Obrazy w raporcie korzystają z oryginalnych adresów źródłowych, bez lokalnego pobierania i osadzania binarnego.
+- Raport ma okładkę po lewej jako link do strony filmu, a nazwę pliku, tytuł, oceny, gatunki, opis i uwagi po prawej. Wysokość treści wyznacza wysokość okładki, a jej naturalne proporcje szerokość. Na wąskim ekranie szerokość obrazu ograniczono do 38% pozycji, zachowując cały obraz bez przycinania i czytelność tekstu.
+- Wprowadzono niewielki lokalny skrypt dostosowujący rozmiary po wczytaniu obrazu i zmianie rozmiaru treści. CSP dopuszcza ten skrypt przez losowy nonce oraz obrazy HTTPS, bez dopuszczania dowolnych skryptów. Brak lub błąd obrazu pozostawia treść tekstową.
+- Starsze dane pamięci bez pola plakatu są odświeżane przy kolejnym pobraniu filmu; jeśli sieć jest niedostępna, aplikacja zachowuje wcześniej zapisane dane filmu.
+- README uzupełniono o układ, obsługę starszej pamięci i wymaganie połączenia z siecią do wyświetlania obrazów. Tekst raportu pozostaje dostępny offline.
+
+### Weryfikacja
+
+- Wszystkie 32 testy zakończyły się sukcesem, w tym testy adresów obrazu i formatów JSON-LD, plakatu Filmweb, wyboru zapasowego plakatu z drugiego źródła, pomijania nieprawidłowych adresów i aktualizacji starszej pamięci z zachowaniem danych przy awarii sieci.
+- Wygenerowano `build/lista.html` z rzeczywistymi plakatami trzech filmów: „Incepcja”, „Matrix” i „Życie jest piękne”.
+- Sprawdzono raport w izolowanym Edge sterowanym przez Playwright: wszystkie trzy obrazy się załadowały, ich wysokość odpowiada wysokości wnętrza pozycji, szerokość zachowuje proporcje źródła, a tekst zaczyna się za obrazem. Nie odnotowano błędów JavaScript. Przy szerokości 390 px raport nie wychodzi poza ekran.
+- Obejrzano zrzut `build/report-posters.png`; układ jest czytelny i odpowiada zamówieniu. Zrzut mobilny zapisano w `build/report-posters-mobile.png`. Pomocnicze skrypty i wyniki w `build/` nie są wersjonowane.
+- Nie modyfikowano nieśledzonych `.codegraph/`, `tests/180.txt` ani `tests/180.html`. Iterację kończy lokalny commit kodu, szablonu, testów i dokumentacji, bez wysyłania do zdalnego repozytorium.
+
 ## 2026-10-27 — Tytuły bez apostrofu: Bettys Revenge
 
 ### Polecenie użytkownika

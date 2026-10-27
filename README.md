@@ -12,7 +12,7 @@ Okienkowa aplikacja w Pythonie i PySide6 (Qt) do tworzenia katalogu filmów na p
 - Podgląd wyników, poprawianie tytułu i roku oraz ręczne wskazanie linku do filmu.
 - Pobieranie w osobnym wątku, postęp i anulowanie z raportem częściowym.
 - Lokalna pamięć danych SQLite ważna przez 7 dni, którą można wyłączyć.
-- Samodzielny raport HTML z tytułem będącym linkiem, ocenami, gatunkami, krótkim opisem i źródłami. Raport nie pobiera zewnętrznych zasobów i działa po zapisaniu bez Internetu.
+- Raport HTML z klikalną okładką po lewej, tytułem będącym linkiem, ocenami, gatunkami, krótkim opisem i źródłami po prawej. Tekst działa po zapisaniu bez Internetu; okładki są ładowane z adresów źródłowych i wymagają połączenia z siecią.
 
 ## Wymagania i instalacja
 
@@ -75,6 +75,10 @@ Typowy wynik `ls > plik.txt` w PowerShell jest obsługiwany, ale terminal może 
 6. „Otwórz raport” otwiera HTML w domyślnej przeglądarce. „Zapisz raport” pozwala zapisać obecne wyniki ponownie, np. w innym miejscu po błędzie zapisu.
 
 Domyślne nazwy: `lista.txt` → `lista.html` obok listy; katalog `Filmy` → `Filmy.html` obok katalogu. Istniejący raport wymaga potwierdzenia zastąpienia. Pliki filmów i lista wejściowa nie są modyfikowane.
+
+Okładka w raporcie jest linkiem do strony filmu u dostawcy obrazu. Aplikacja odczytuje adres z metadanych Filmweb lub IMDb, a pliku obrazu nie zapisuje lokalnie ani nie osadza w HTML. Plakat znajduje się po lewej stronie pozycji, na wysokość jej treści, z szerokością wynikającą z proporcji źródłowego obrazu. Na wąskich ekranach jego szerokość jest ograniczana, aby tekst pozostał czytelny; obraz zachowuje proporcje i nie jest przycinany. Mały skrypt w raporcie aktualizuje rozmiar po załadowaniu obrazu, zmianie szerokości okna i rozwinięciu uwag. Brak adresu lub błąd ładowania obrazu pozostawia sam tekst.
+
+Starsze wpisy lokalnej pamięci, które nie zawierają jeszcze pola okładki, są uzupełniane podczas kolejnego wyszukiwania. Jeśli serwis jest wtedy niedostępny, zachowywane są dotychczasowe opisy i oceny.
 
 Anulowanie czeka na zakończenie bieżącego żądania HTTP (limit czasu sieci do 20 sekund bezczynności). Niezakończone wyszukiwanie zostaje oznaczone jako raport częściowy. Przy próbie zamknięcia działającego wyszukiwania aplikacja rozpoczyna anulowanie i prosi o ponowne zamknięcie po zakończeniu żądania.
 

@@ -1,4 +1,5 @@
 import os
+import secrets
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -6,6 +7,7 @@ from pathlib import Path
 from jinja2 import Environment, PackageLoader, select_autoescape
 
 from .models import MovieResult
+from .providers import image_url
 
 GENRE_NAMES = {
     "action": "Akcja", "adventure": "Przygodowy", "animation": "Animacja", "biography": "Biograficzny",
@@ -24,8 +26,9 @@ def translate_genres(genres: list[str]) -> str:
 def write_report(path: Path, source: Path, results: list[MovieResult], partial: bool = False):
     environment = Environment(loader=PackageLoader("moviecheck", "templates"), autoescape=select_autoescape(["html"]))
     environment.filters["genres"] = translate_genres
+    environment.filters["image_url"] = image_url
     content = environment.get_template("report.html").render(
-        source=source.name, results=results, partial=partial,
+        source=source.name, results=results, partial=partial, script_nonce=secrets.token_urlsafe(18),
         generated=datetime.now().astimezone().strftime("%Y-%m-%d %H:%M %Z"),
         found=sum(bool(result.entries) for result in results),
     )

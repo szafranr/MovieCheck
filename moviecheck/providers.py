@@ -67,6 +67,34 @@ def movie_objects(value):
             yield from movie_objects(value["@graph"])
 
 
+def image_url(value, base_url: str = "") -> str:
+    if isinstance(value, list):
+        return next((url for item in value if (url := image_url(item, base_url))), "")
+    if isinstance(value, dict):
+        value = value.get("url") or value.get("contentUrl")
+    if not isinstance(value, str) or not value.strip():
+        return ""
+    try:
+        url = urljoin(base_url, value.strip())
+        parts = urlsplit(url)
+        if parts.scheme == "https" and parts.hostname and not parts.username and not parts.password and parts.port in (None, 443):
+            return url
+    except ValueError:
+        pass
+    return ""
+
+
+def page_poster(soup: BeautifulSoup, url: str) -> str:
+    for selector, attributes in (("meta[property='og:image']", ("content",)), ("[itemprop='image']", ("content", "src"))):
+        element = soup.select_one(selector)
+        if element:
+            for attribute in attributes:
+                poster = image_url(element.get(attribute), url)
+                if poster:
+                    return poster
+    return ""
+
+
 def parse_filmweb_page(soup: BeautifulSoup, url: str) -> MovieData:
     title = soup.select_one("h1[itemprop='name'], h1.filmCoverSection__title")
     if not title:
@@ -89,7 +117,8 @@ def parse_filmweb_page(soup: BeautifulSoup, url: str) -> MovieData:
     return MovieData(title=title.get_text(" ", strip=True), url=validate_movie_url(url, "Filmweb"), source="Filmweb",
                      year=year, original_title=original_title, description=description, genres=genres,
                      rating=text("[itemprop='aggregateRating'] [itemprop='ratingValue']"),
-                     rating_scale=text("[itemprop='aggregateRating'] [itemprop='bestRating']") or "10")
+                     rating_scale=text("[itemprop='aggregateRating'] [itemprop='bestRating']") or "10",
+                     poster_url=page_poster(soup, url))
 
 
 def parse_movie_page(html: str, url: str, source: str) -> MovieData:
@@ -130,7 +159,8 @@ def parse_movie_page(html: str, url: str, source: str) -> MovieData:
                      year=int(year_match.group(1) if year_match.lastindex else year_match.group()) if year_match else None,
                      original_title=str(alternative), description=description,
                      genres=[str(genre) for genre in genres], rating=str(rating.get("ratingValue") or ""),
-                     rating_scale=str(rating.get("bestRating") or "10"))
+                     rating_scale=str(rating.get("bestRating") or "10"),
+                     poster_url=image_url(data.get("image"), url) or page_poster(soup, url))
 
 
 class WebProvider:
@@ -180,9 +210,14 @@ class WebProvider:
     def get_movie(self, url: str) -> MovieData:
         url = validate_movie_url(url, self.source)
         cached = self.cache.get(url)
-        if cached:
+        if cached and "poster_url" in cached:
             return MovieData(**cached)
-        movie = parse_movie_page(self.fetch(url), url, self.source)
+        try:
+            movie = parse_movie_page(self.fetch(url), url, self.source)
+        except ProviderError:
+            if cached:
+                return MovieData(**cached)
+            raise
         self.cache.put(url, asdict(movie))
         return movie
 

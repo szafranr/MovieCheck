@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https:; style-src 'unsafe-inline'; script-src 'nonce-{{ script_nonce }}'; base-uri 'none'">
   <title>{{ source }} — MovieCheck</title>
   <style>
     :root { color-scheme: light dark; --background: #f3f5f8; --surface: #fff; --text: #182230; --muted: #536174; --accent: #145da0; --border: #d9e1ec; }
@@ -16,7 +16,12 @@
     h2 { font-size: 22px; margin: 0 0 10px; }
     a { color: var(--accent); text-underline-offset: 4px; }
     ol { list-style: none; padding: 0; display: grid; gap: 18px; }
-    article { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 24px; }
+    article { display: flex; align-items: stretch; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+    .movie-content { flex: 1; min-width: 0; padding: 24px; }
+    .poster-link { display: block; position: relative; flex: 0 0 var(--poster-width, 160px); max-width: 38%; background: var(--background); }
+    .poster-link img { display: block; position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; object-position: left top; }
+    .poster-link:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
+    @media (max-width: 600px) { main { padding: 24px 12px; } .movie-content { padding: 16px; } h2 { font-size: 19px; } }
     .meta, .filename, footer, .source { color: var(--muted); font-size: 14px; }
     .ratings { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
     .badge { border: 1px solid var(--border); padding: 3px 10px; border-radius: 6px; font-size: 14px; }
@@ -39,7 +44,15 @@
   {% for result in results %}
     {% set movie = result.primary %}
     {% set description = result.description_entry %}
+    {% set poster = result.entries|selectattr('poster_url')|first %}
+    {% set poster_url = poster.poster_url|image_url if poster else '' %}
     <li><article>
+      {% if poster_url %}
+      <a class="poster-link" href="{{ poster.url }}" target="_blank" rel="noopener noreferrer" aria-label="{{ poster.title }} — strona filmu">
+        <img src="{{ poster_url }}" alt="Plakat filmu {{ poster.title }}" loading="lazy" decoding="async" referrerpolicy="no-referrer">
+      </a>
+      {% endif %}
+      <div class="movie-content">
       <div class="filename">{{ result.query.filename }}</div>
       <h2>{% if movie %}<a href="{{ movie.url }}" target="_blank" rel="noopener noreferrer">{{ movie.title }}</a>{% else %}{{ result.query.title }}{% endif %}
         {% if movie and movie.year %} ({{ movie.year }}){% elif result.query.year %} ({{ result.query.year }}){% endif %}
@@ -54,9 +67,44 @@
       {% if description %}<p class="description">{{ description.description }}</p><div class="source">Opis: <a href="{{ description.url }}" target="_blank" rel="noopener noreferrer">{{ description.source }}</a></div>
       {% else %}<p class="notice">Brak opisu. {{ result.status }}.</p>{% endif %}
       {% if result.notes %}<details><summary>Uwagi dotyczące wyszukiwania</summary><ul>{% for note in result.notes %}<li>{{ note }}</li>{% endfor %}</ul></details>{% endif %}
+      </div>
     </article></li>
   {% endfor %}
   </ol>
   <footer>MovieCheck · Oceny i opisy pochodzą ze wskazanych źródeł. Dane z lokalnej pamięci mogą mieć do 7 dni. Brak oceny nie oznacza oceny zero.</footer>
-</main></body>
+</main>
+<script nonce="{{ script_nonce }}">
+  // Wysokość tekstu wyznacza wysokość okładki, a proporcje źródła jej szerokość.
+  // Ograniczenie szerokości chroni czytelność tekstu na małych ekranach.
+  for (const card of document.querySelectorAll('article')) {
+    const link = card.querySelector('.poster-link');
+    if (!link) continue;
+    const image = link.querySelector('img');
+    const content = card.querySelector('.movie-content');
+    let pending = false;
+    const fitPoster = () => {
+      pending = false;
+      if (!image.naturalWidth || !image.naturalHeight) return;
+      const width = Math.min(content.getBoundingClientRect().height * image.naturalWidth / image.naturalHeight, card.clientWidth * 0.38);
+      if (Math.abs(link.getBoundingClientRect().width - width) > 0.5) {
+        card.style.setProperty('--poster-width', `${width}px`);
+      }
+    };
+    const schedule = () => {
+      if (!pending) { pending = true; requestAnimationFrame(fitPoster); }
+    };
+    image.addEventListener('load', schedule);
+    const hidePoster = () => { link.hidden = true; link.style.display = 'none'; };
+    image.addEventListener('error', hidePoster);
+    if (image.complete && !image.naturalWidth) hidePoster();
+    if ('ResizeObserver' in window) {
+      const observer = new ResizeObserver(schedule);
+      observer.observe(content);
+      observer.observe(card);
+    }
+    window.addEventListener('resize', schedule);
+    schedule();
+  }
+</script>
+</body>
 </html>

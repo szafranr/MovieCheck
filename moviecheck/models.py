@@ -19,6 +19,7 @@ class MovieData:
     genres: list[str] = field(default_factory=list)
     rating: str = ""
     rating_scale: str = "10"
+    poster_url: str = ""
 
 
 @dataclass
