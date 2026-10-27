@@ -1,5 +1,19 @@
 # Dziennik interakcji i prac
 
+## 2026-10-27 — Aktualizacja pip przed instalacją edytowalną, wersja 0.1.13
+
+### Zgłoszenie użytkownika
+
+Instalacja na Macu przez `.venv/bin/python -m pip install -e .` zgłasza brak setup.py/setup.cfg pomimo znalezienia pyproject.toml. W komunikacie podano pip 21.2.4.
+
+### Zmiany i weryfikacja
+
+- Po sprawdzeniu CodeGraph, skryptu i testów potwierdzono, że launcher dotąd sprawdzał jedynie obecność pip, bez jego aktualizacji. Dodano `python -m pip install --upgrade pip` przed instalacją edytowalną w lokalnym środowisku. Nie aktualizuje się narzędzi przy każdym zwykłym starcie; tylko w gałęzi przygotowującej zależności.
+- README zawiera komplet poleceń ręcznych z aktualizacją pip i sprawdzeniem Pythona 3.11+. Nie założono konkretnej wersji Pythona użytkownika; aktualizacja pip nie zastąpi aktualizacji zbyt starego interpretera.
+- Testowy interpreter symuluje pip 21.2.4 i odrzuca instalację edytowalną, dopóki aktualizacja pip nie nastąpi. Dodano też przypadek nieudanej aktualizacji: instalacja i uruchomienie są zatrzymywane, a ponowienie może się udać.
+- Zwiększono wersję jeden raz przez build.py bump: 0.1.12 → 0.1.13. Zmiana dotyczy uruchamiania ze źródeł na macOS, bez nowego EXE.
+- Weryfikacja: sześć testów launchera w rzeczywistej powłoce Git Bash z kontrolowanym interpreterem oraz kontrola składni shell. Nie wykonywano instalacji ani uruchomienia na rzeczywistym Macu. Iterację kończy lokalny commit; pliki użytkownika pozostają poza commitem.
+
 ## 2026-10-27 — Uruchamianie macOS po git clone, wersja 0.1.12
 
 ### Zgłoszenie użytkownika

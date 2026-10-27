@@ -14,8 +14,12 @@ case "$*" in
   *sys.version_info*) exit "${PYTHON_VERSION_RESULT:-0}" ;;
   *'import PySide6'*) test -f installed ;;
   '-m venv .venv') mkdir -p .venv/bin; cp "$0" .venv/bin/python; chmod +x .venv/bin/python ;;
-  '-m pip --version') exit 0 ;;
+  '-m pip --version') echo 'pip 21.2.4'; exit 0 ;;
+  '-m pip install --upgrade pip')
+    if [ "${FAIL_PIP_UPGRADE:-0}" = 1 ]; then exit 8; fi
+    touch pip-ready ;;
   '-m pip install -e .')
+    test -f pip-ready || exit 10
     echo install >> calls
     if [ "${FAIL_INSTALL:-0}" = 1 ]; then exit 7; fi
     touch installed ;;
@@ -82,3 +86,11 @@ class MacLauncherTests(unittest.TestCase):
         self.assertIn("macOS", result.stderr)
         self.assertEqual(marker.read_bytes(), b"foreign environment fixture")
         self.assertFalse((self.root / "launched").exists())
+
+    def test_failed_pip_upgrade_stops_editable_install_and_launch(self):
+        result = self.launch(FAIL_PIP_UPGRADE="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse((self.root / "calls").exists())
+        self.assertFalse((self.root / "launched").exists())
+        self.assertFalse((self.root / ".venv/.moviecheck-install.stamp").exists())
+        self.assertEqual(self.launch().returncode, 0)

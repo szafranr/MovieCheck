@@ -31,6 +31,7 @@ if [ "$fingerprint" != "$(cat "$stamp" 2>/dev/null || true)" ] || ! .venv/bin/py
     if ! .venv/bin/python -m pip --version >/dev/null 2>&1; then
         .venv/bin/python -m ensurepip --upgrade
     fi
+    .venv/bin/python -m pip install --upgrade pip
     .venv/bin/python -m pip install -e .
     printf '%s\n' "$fingerprint" > "$stamp"
 fi

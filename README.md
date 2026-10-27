@@ -46,7 +46,7 @@ macOS, Terminal, po `git clone`, w katalogu projektu:
 sh start_macos.command
 ```
 
-Skrypt wymaga, aby `python3 --version` wskazywał Python 3.11 lub nowszy. Przy pierwszym uruchomieniu tworzy lokalne `.venv`, instaluje aplikację i zależności z `pyproject.toml`, a następnie otwiera okno. Instalacja wymaga Internetu. Przy kolejnych uruchomieniach korzysta z tego samego środowiska; po zmianie wersji lub konfiguracji odświeża instalację. Błąd instalacji zatrzymuje uruchamianie i pozostawia komunikat w Terminalu. Skrypt działa również z katalogu ze spacjami w nazwie.
+Skrypt wymaga, aby `python3 --version` wskazywał Python 3.11 lub nowszy. Przy pierwszym uruchomieniu tworzy lokalne `.venv`, aktualizuje w nim `pip`, instaluje aplikację i zależności z `pyproject.toml`, a następnie otwiera okno. Instalacja wymaga Internetu. Przy kolejnych uruchomieniach korzysta z tego samego środowiska; po zmianie wersji lub konfiguracji odświeża instalację. Błąd instalacji zatrzymuje uruchamianie i pozostawia komunikat w Terminalu. Skrypt działa również z katalogu ze spacjami w nazwie.
 
 `.venv` celowo nie znajduje się w Git: zawiera pliki zależne od systemu, architektury i lokalnych ścieżek. `git clone` pobiera kod i deklarację zależności, a skrypt odtwarza środowisko na nowym komputerze. Nie kopiuj `.venv` z Windows na Maca. Jeśli taki katalog już skopiowano, zachowaj go pod inną nazwą przed uruchomieniem skryptu.
 
@@ -56,7 +56,18 @@ Po przygotowaniu środowiska możesz też uruchamiać program bez instalowania:
 .venv/bin/python -m moviecheck
 ```
 
-Alternatywnie pierwszą instalację można wykonać ręcznie: `python3 -m venv .venv`, następnie `.venv/bin/python -m pip install -e .`. Plik `start_macos.command` ma w Git uprawnienie wykonywania i zakończenia linii LF; można go otworzyć również dwuklikiem w Finderze.
+Alternatywnie pierwszą instalację można wykonać ręcznie:
+
+```sh
+python3 --version  # wymagane co najmniej 3.11
+python3 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install -e .
+.venv/bin/python -m moviecheck
+```
+
+Błąd „setup.py or setup.cfg not found” przy obecnym `pyproject.toml` i starym `pip 21.2.4` wymaga aktualizacji pip powyższym poleceniem. Jeśli `.venv/bin/python --version` pokazuje mniej niż 3.11, najpierw zainstaluj nowszego Pythona i utwórz nim nowe środowisko; aktualizacja pip nie zmienia wersji interpretera.
+ Plik `start_macos.command` ma w Git uprawnienie wykonywania i zakończenia linii LF; można go otworzyć również dwuklikiem w Finderze.
 
 ## Przygotowanie listy TXT
 
