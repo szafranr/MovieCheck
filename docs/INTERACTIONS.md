@@ -1,5 +1,27 @@
 # Dziennik interakcji i prac
 
+## 2026-10-27 — Filmy opisane nazwą katalogu bez rozszerzenia
+
+### Polecenie użytkownika
+
+> aplikacja nie uwzględnia sytuacji, jak plik z filmem znajduje się w katalogu, czyli bez rozszerzenia pliku z filmem. taki przykład jest w examples
+
+### Diagnoza i zmiany
+
+- Użyto CodeGraph przed analizą `load_queries`, `extract_listing_names` i `parse_filename`; odczytano również instrukcje, dokumentację i rzeczywiste listy w `examples/`.
+- Stwierdzono, że filtr TXT przyjmował wyłącznie wiersze zakończone rozszerzeniem wideo. Pomijane były m.in. `Final.Interview.2026.1080p.SCREENER.WEB-DL.H264.AAC-AOC`, `Mayday.2026.1080p.WEB.h264-ETHEL` oraz zapis z odstępami `Matchbox The Movie 2026 1080p WEB-DL HEVC x265 10Bit DDP5.1 Subs KINGDOM`.
+- TXT przyjmuje teraz także nazwy katalogów i tytuły bez rozszerzenia, w tym kropki w nazwie wydania, ścieżki i końcowe separatory. Nadal pomijane są znane rozszerzenia pomocnicze, ukryte wpisy i foldery techniczne. Poprawiono rozpoznawanie sum listingu, aby nagłówek `total 10` był pomijany, ale film `Total Recall (1990)` pozostał przyjęty.
+- Dodano wiersze katalogów PowerShell bez kolumny długości oraz katalogi w listingu Unix `ls -l`; zachowywane są nazwy zaczynające się od liczby, np. `1984 (1984)`.
+- Skanowanie dysku uwzględnia katalogi nazwane filmem z rokiem lub oznaczeniem wydania. Katalog filmu jest jedną pozycją i nie dubluje znajdujących się w nim plików, także przy rekurencji. Kontenery kolekcji pozostają zależne od opcji podkatalogów. Katalog bez roku może wykorzystać rok z pliku o zgodnym tytule. Katalog wybrany bezpośrednio także może opisać film, nawet jeśli jego plik ma ogólną nazwę `video.mkv`.
+- W liście obejmującej katalog i plik tego samego tytułu oraz roku zachowywany jest plik; oddzielne pliki wydań i różne roczniki są zachowane. Nie jest wykonywane przybliżone łączenie różnych tytułów.
+- Uzupełniono README, w tym polecenie eksportu PowerShell obejmujące pliki i katalogi.
+
+### Weryfikacja i zakończenie iteracji
+
+- 78 testów zakończyło się sukcesem. Dodano 13 przypadków dla wpisów bez rozszerzeń z przykładów, mieszanych list i plików pomocniczych, wierszy katalogów PowerShell/Unix, ścieżek Windows/macOS, tytułów bez roku, duplikatów katalog/plik, różnych wydań, faktycznych katalogów filmowych i rekurencji. Zachowano wcześniejsze testy odporności wyszukiwania i generowania HTML.
+- Sprawdzono wszystkie rzeczywiste listy bez wykonywania żądań sieciowych i bez zmiany plików: `177.txt` — 46 pozycji, w tym 14 bez rozszerzenia wideo; `178.txt` — 35 i 4; `179.txt` — 30 i 9; `180.txt` — 45 i 9; `lista.txt` — 48 i 9. Żaden tytuł z rozpoznanych wpisów nie został pominięty; identyczny tytuł i rok katalogu oraz pliku może dać jedną pozycję zgodnie z deduplikacją.
+- Listy i raporty użytkownika w `examples/` oraz indeks `.codegraph/` pozostawiono poza commitem. Iterację kończy lokalny commit parsera, testów i dokumentacji, bez wysyłania do zdalnego repozytorium.
+
 ## 2026-10-27 — Błąd przy 80% i odporność całej serii wyszukiwania
 
 ### Zgłoszenie użytkownika

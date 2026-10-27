@@ -4,7 +4,7 @@ Okienkowa aplikacja w Pythonie i PySide6 (Qt) do tworzenia katalogu filmów na p
 
 ## Funkcje
 
-- Wybór katalogu z filmami, opcjonalnie wraz z podkatalogami, albo listy `.txt`.
+- Wybór katalogu z filmami, opcjonalnie wraz z podkatalogami, albo listy `.txt`; filmy mogą być opisane nazwą pliku lub katalogu bez rozszerzenia.
 - Odczyt prostych list nazw, typowego `ls -l` i tabelarycznego wyniku PowerShell `ls`.
 - Obsługa UTF-8, UTF-16 z BOM i awaryjnie Windows-1250.
 - Rozpoznawanie tytułu i roku; usuwanie typowych oznaczeń jakości, kodeków i wydania.
@@ -52,7 +52,7 @@ Opcjonalnie `chmod +x start_macos.command` pozwala używać przygotowanego pliku
 
 ## Przygotowanie listy TXT
 
-Najpewniejszy format to jedna pełna nazwa pliku w wierszu, z rozszerzeniem, np. `Inception.2010.1080p.mkv`. Przykład znajduje się w `examples/lista.txt`.
+Najpewniejszy format to jedna nazwa pliku lub katalogu filmowego w wierszu, np. `Inception.2010.1080p.mkv`, `Final.Interview.2026.1080p.SCREENER.WEB-DL.H264.AAC-AOC` albo `Matchbox The Movie 2026 1080p WEB-DL HEVC x265`. Rozszerzenie wideo nie jest wymagane. Obsługiwane są również proste tytuły, np. `Inception`, ścieżki oraz nazwy zakończone `/` lub `\`. Przykłady znajdują się w `examples/`.
 
 macOS:
 
@@ -63,10 +63,14 @@ ls -1 /sciezka/do/filmow > lista.txt
 Windows, PowerShell:
 
 ```powershell
-Get-ChildItem 'D:\Filmy' -File -Name | Set-Content lista.txt -Encoding utf8
+Get-ChildItem 'D:\Filmy' -Name | Set-Content lista.txt -Encoding utf8
 ```
 
-Typowy wynik `ls > plik.txt` w PowerShell jest obsługiwany, ale terminal może skrócić zbyt długie nazwy. Pełnej nazwy utraconej przy eksporcie nie da się odtworzyć. Listy wielokolumnowe i nazwy zawierające znak nowego wiersza nie są obsługiwane. Pliki bez rozpoznanego rozszerzenia wideo są pomijane.
+Typowy wynik `ls > plik.txt` w PowerShell jest obsługiwany, również dla katalogów bez kolumny rozmiaru. Odczytywane są też katalogi w listingu Unix `ls -l`. Terminal może skrócić zbyt długie nazwy; pełnej nazwy utraconej przy eksporcie nie da się odtworzyć. Listy wielokolumnowe i nazwy zawierające znak nowego wiersza nie są obsługiwane. Pomijane są nagłówki, komentarze, napisy, grafiki, dokumenty, archiwa i inne znane pliki pomocnicze. Wpis bez rozszerzenia może być tytułem lub nazwą wydania filmu; nieznaną końcówkę po kropce, np. `.H264-GROUP`, traktuje się jako część nazwy, a nie dowód obecności rozszerzenia pliku.
+
+Podczas skanowania dysku aplikacja rozpoznaje również katalogi filmowe po nazwie z rokiem lub oznaczeniem wydania. Taki katalog stanowi jedną pozycję, także jeśli zawiera kilka plików wideo; jego wnętrze nie jest ponownie dodawane do raportu. Wybranie bezpośrednio takiego katalogu pozwala rozpoznać tytuł nawet przy ogólnej nazwie pliku w środku, np. `video.mkv`. Katalog bez roku może zostać rozpoznany na podstawie zgodnej nazwy pliku wideo; w takim przypadku rok jest pobierany z tego pliku, jeśli jest jednoznaczny.
+
+Katalogi zawierające kolejne katalogi filmowe są traktowane jako kolekcje; ich przeglądanie wymaga zaznaczenia „Uwzględnij podkatalogi”. Katalogi techniczne, np. `Samples`, `Subs`, `BDMV` i `CERTIFICATE`, oraz ukryte wpisy są pomijane przy skanowaniu. Dowiązania symboliczne nie są przeglądane. Jeśli TXT zawiera jednocześnie nazwę katalogu oraz plik rozpoznany jako ten sam tytuł i rok, zachowywany jest wpis pliku. Osobne pliki różnych wydań oraz różne lata produkcji pozostają oddzielnymi pozycjami.
 
 ## Obsługa
 
