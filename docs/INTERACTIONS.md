@@ -1,5 +1,39 @@
 # Dziennik interakcji i prac
 
+## 2026-10-27 — Błąd przy 80% i odporność całej serii wyszukiwania
+
+### Zgłoszenie użytkownika
+
+> mam błąd
+> upewnij siuę, ze błąd sprawdzania jednego filmu nie zatrzyma wyszukiwania dla pozostałych.
+> ten błąd mam juz drugi raz w tym samym miejscu 80% wyszukiwania, to przerywa generowania raportu html
+
+Użytkownik dołączył zrzut z komunikatem `OSError: [Errno 22] Invalid argument` w oknie „Błąd wyszukiwania”.
+
+### Potwierdzona przyczyna
+
+- Przed analizą użyto CodeGraph do odczytu pętli wątku, kończenia wyszukiwania, obsługi dostawców i filtrowania ofert VOD.
+- Odtworzono na Windows, że `datetime.fromisoformat(...).astimezone()` wywołuje `OSError: [Errno 22] Invalid argument` dla niektórych skrajnych dat, w tym `9999-12-31` i części dat sprzed 1970 r.
+- Lokalną pamięć aplikacji otwarto wyłącznie do odczytu. Znaleziono konkretny wadliwy rekord: `/api/v1/vod/film/10044479/providers/list?countryCode=PL`, pole `end` o wartości `9999-12-31T00:00:00`.
+- Wyjątek nie należał do dotychczas przechwytywanych typów w filtrze VOD ani w obsłudze źródeł. Trafiał do obsługi całej serii w wątku, a okno po takim błędzie pomijało generowanie HTML.
+
+### Wykonane zmiany
+
+- Daty ofert VOD są porównywane jako obiekty `datetime`, bez konwersji skrajnych dat przez systemowe funkcje czasu. Datom bez strefy przypisywana jest strefa odniesienia; jawne przesunięcia są zachowywane. Niepoprawna data pomija wyłącznie daną ofertę.
+- Wyjątki pojedynczego dostawcy i VOD są przechwytywane niezależnie: pozostają w uwagach danego filmu, a poprawnie pobrane opisy i oceny zostają zachowane.
+- Dodano dodatkową ochronę na poziomie każdego filmu w `SearchWorker`: nawet nieoczekiwany wyjątek całego `lookup` tworzy wynik z informacją o błędzie, zwiększa postęp i pozwala sprawdzić następny film. Nie przechwytywano `BaseException`; anulowanie pozostaje obsługiwane dotychczasową flagą.
+- Okno zapisuje raport również po błędzie przerywającym serię, oznacza go jako częściowy i dopiero potem pokazuje komunikat o przerwaniu. Niesprawdzone pozycje otrzymują przyczynę przerwania. Gdy sam zapis nie jest możliwy, zebrane wyniki pozostają w tabeli.
+- Zabezpieczono zamykanie zasobów, aby błąd jednego zasobu nie pomijał zamknięcia pozostałych i nie ukrywał zebranych wyników.
+- Dodano `moviecheck/diagnostics.py`: nieoczekiwane wyjątki wraz z nazwą pliku, źródłem i śladem wywołań trafiają do `errors.log` w katalogu danych aplikacji. Limit: 2 MB i dwie kopie rotacyjne. Niepowodzenie otwarcia dziennika nie blokuje programu.
+- Uzupełniono polskie README o kontynuowanie wyszukiwania, raporty częściowe, diagnostykę i obsługę skrajnych dat.
+
+### Weryfikacja i zakończenie iteracji
+
+- 65 testów zakończyło się sukcesem. Nowe regresje obejmują skrajne daty i poprawną ofertę po wadliwej, błąd źródła/VOD z zachowaniem drugiej oceny, błędy `OSError` oraz `TypeError` dokładnie po ośmiu z dziesięciu filmów, przetworzenie ostatniego filmu i zapis kompletnego HTML, raport częściowy zapisany przed komunikatem, błąd zamykania zasobu oraz zapis diagnostyki i brak uprawnień do dziennika.
+- Końcowa kontrola rzeczywistej pamięci aplikacji w trybie tylko do odczytu przetworzyła oferty 17 filmów bez żadnego wyjątku. Wcześniej wadliwy rekord `10044479` poprawnie zwrócił jedną ofertę abonamentową Amazon Prime Video. Nie było potrzeby kasowania pamięci ani pobierania danych ponownie.
+- Nie zmieniano list użytkownika `examples/lista.txt`, `examples/180.txt` ani indeksu `.codegraph/`. Iterację kończy lokalny commit poprawki, testów i dokumentacji, bez wysyłania do repozytorium zdalnego.
+- Użytkownik powinien zamknąć i ponownie uruchomić aplikację, aby załadować poprawione moduły Pythona.
+
 ## 2026-10-27 — Abonamenty VOD i dwie niezależne oceny
 
 ### Polecenie użytkownika

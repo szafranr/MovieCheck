@@ -1,4 +1,5 @@
 import sys
+import logging
 from pathlib import Path
 
 from PySide6.QtCore import QSettings, QStandardPaths, QThread, QUrl, Signal
@@ -10,11 +11,14 @@ from PySide6.QtWidgets import (
 )
 
 from .cache import MovieCache
+from .diagnostics import configure_logging
 from .inputs import load_queries, suggested_report_path
 from .models import MovieQuery, MovieResult
 from .providers import validate_movie_url
 from .report import translate_genres, write_report
 from .service import MovieService
+
+logger = logging.getLogger(__name__)
 
 
 class SearchWorker(QThread):
@@ -42,20 +46,32 @@ class SearchWorker(QThread):
                 if self.isInterruptionRequested():
                     break
                 self.progress.emit(position, len(self.jobs), query.title)
-                result = service.lookup(query, override)
+                try:
+                    result = service.lookup(query, override)
+                except Exception as error:
+                    logger.exception("Błąd przetwarzania pliku %s", query.filename)
+                    result = MovieResult(query, notes=[f"Błąd przetwarzania filmu: {type(error).__name__}: {error}"])
                 if self.isInterruptionRequested():
                     break
                 self.result_ready.emit(index, result)
                 self.progress.emit(position + 1, len(self.jobs), query.title)
             self.partial = self.isInterruptionRequested()
         except Exception as error:
+            logger.exception("Przerwanie serii wyszukiwania")
             self.error = f"{type(error).__name__}: {error}"
             self.failed.emit(self.error)
         finally:
-            if service:
-                service.close()
-            if cache:
-                cache.close()
+            for resource in (service, cache):
+                if resource is None:
+                    continue
+                try:
+                    resource.close()
+                except Exception as error:
+                    logger.exception("Błąd zamykania zasobów wyszukiwania")
+                    self.partial = True
+                    if not self.error:
+                        self.error = f"{type(error).__name__}: {error}"
+                        self.failed.emit(self.error)
 
 
 class MainWindow(QMainWindow):
@@ -219,7 +235,6 @@ class MainWindow(QMainWindow):
         self.worker = SearchWorker(jobs, cache_directory / "movies.sqlite3", self.use_cache.isChecked(), self)
         self.worker.result_ready.connect(self.receive_result)
         self.worker.progress.connect(self.update_progress)
-        self.worker.failed.connect(lambda message: QMessageBox.warning(self, "Błąd wyszukiwania", message))
         self.worker.finished.connect(self.search_finished)
         self.set_busy(True)
         self.worker.start()
@@ -240,24 +255,34 @@ class MainWindow(QMainWindow):
         self.worker = None
         self.set_busy(False)
         if worker.error:
-            self.status.setText("Wyszukiwanie zakończone błędem. Możesz spróbować ponownie.")
-        else:
-            self.report_partial = worker.partial or len(self.completed_indices) < len(self.results)
-            self.save_report(self.job_output, self.report_partial)
+            for index, result in enumerate(self.results):
+                if index not in self.completed_indices:
+                    result.notes.append(f"Wyszukiwanie przerwane: {worker.error}")
+        self.report_partial = worker.partial or bool(worker.error) or len(self.completed_indices) < len(self.results)
+        saved = self.save_report(self.job_output, self.report_partial)
+        if worker.error:
+            message = f"Wyszukiwanie przerwane: {worker.error}"
+            if saved:
+                message += f"\nZapisano raport częściowy:\n{self.report_path}"
+            else:
+                message += "\nWyniki pozostały w tabeli; możesz zapisać je ponownie."
+            self.status.setText(message)
+            QMessageBox.warning(self, "Wyszukiwanie przerwane", message)
         worker.deleteLater()
 
-    def save_report(self, output: Path, partial: bool):
+    def save_report(self, output: Path, partial: bool) -> bool:
         try:
             write_report(output, self.source, self.results, partial)
         except (OSError, ValueError) as error:
             self.status.setText("Nie udało się zapisać raportu. Wyniki pozostały w tabeli.")
             QMessageBox.warning(self, "Błąd zapisu raportu", str(error))
-            return
+            return False
         self.report_path = output
         self.open_button.setEnabled(True)
         found = sum(bool(result.entries) for result in self.results)
         prefix = "Zapisano raport częściowy" if partial else "Zapisano raport"
         self.status.setText(f"{prefix}: {output} · Z danymi: {found}/{len(self.results)}")
+        return True
 
     def export_report(self):
         if not self.source:
@@ -367,6 +392,7 @@ def main():
     application = QApplication(sys.argv)
     application.setApplicationName("MovieCheck")
     application.setOrganizationName("MovieCheck")
+    configure_logging(Path(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppLocalDataLocation)))
     window = MainWindow()
     window.show()
     sys.exit(application.exec())

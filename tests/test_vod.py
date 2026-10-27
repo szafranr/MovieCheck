@@ -26,6 +26,18 @@ def offer(provider_id, payments=None, **fields):
 
 
 class VodTests(unittest.TestCase):
+    def test_extreme_filmweb_dates_do_not_use_windows_timestamp_conversion(self):
+        for start, end in (("0001-01-01T00:00:00", "9999-12-31T00:00:00"),
+                           ("1900-01-01T00:00:00", "9999-12-31T00:00:00+14:00"),
+                           ("1960-01-01T00:00:00+00:00", "2255-01-01T00:00:00")):
+            with self.subTest(start=start, end=end):
+                results = subscription_offers([offer(1, start=start, end=end)], PROVIDERS, NOW)
+                self.assertEqual([item.provider_name for item in results], ["Netflix"])
+
+    def test_invalid_offer_date_does_not_discard_other_offers(self):
+        rows = [offer(1, end="99999-12-31T00:00:00"), offer(3, [{"subscription": True}], end="9999-12-31T00:00:00")]
+        self.assertEqual([item.provider_name for item in subscription_offers(rows, PROVIDERS, NOW)], ["SkyShowtime (Prime Video)"])
+
     def test_only_subscription_offers_and_no_provider_name_guessing(self):
         rows = [offer(1, [{"subscription": False, "rent": True}]), offer(2, [{"subscription": False, "buy": True}]), offer(3, [{"subscription": True, "rent": False, "buy": False}])]
         results = subscription_offers(rows, PROVIDERS, NOW)

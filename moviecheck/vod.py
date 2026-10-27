@@ -11,6 +11,8 @@ def subscription_offers(offers: list, providers: list, now: datetime | None = No
     if not isinstance(offers, list) or not isinstance(providers, list):
         raise ProviderError("Nierozpoznany format ofert VOD Filmweb.")
     now = now or datetime.now().astimezone()
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=datetime.now().astimezone().tzinfo)
     provider_map = {str(provider["id"]): provider for provider in providers if isinstance(provider, dict) and "id" in provider}
     selected = {}
     for offer in offers:
@@ -20,9 +22,16 @@ def subscription_offers(offers: list, providers: list, now: datetime | None = No
         if not provider or provider.get("countryCode") != "PL":
             continue
         try:
-            start = datetime.fromisoformat(offer["start"]).astimezone() if offer.get("start") else None
-            end = datetime.fromisoformat(offer["end"]).astimezone() if offer.get("end") else None
-        except (ValueError, TypeError):
+            start = datetime.fromisoformat(offer["start"]) if offer.get("start") else None
+            end = datetime.fromisoformat(offer["end"]) if offer.get("end") else None
+            # Nie konwertuj dat ofert przez funkcje czasu systemowego.
+            # Windows odrzuca m.in. 9999-12-31 i część dat sprzed 1970 r.
+            # Porównanie datetime działa również dla takich wartości.
+            if start and start.tzinfo is None:
+                start = start.replace(tzinfo=now.tzinfo)
+            if end and end.tzinfo is None:
+                end = end.replace(tzinfo=now.tzinfo)
+        except (ValueError, TypeError, OverflowError, OSError):
             continue
         if (start and start > now) or (end and end <= now):
             continue

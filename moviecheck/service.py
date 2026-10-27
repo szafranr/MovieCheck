@@ -1,7 +1,11 @@
+import logging
+
 from .models import MovieQuery, MovieResult
 from .providers import ProviderError, WebProvider
 from .imdb import IMDbProvider
 from .vod import FilmwebVod
+
+logger = logging.getLogger(__name__)
 
 
 class MovieService:
@@ -43,13 +47,21 @@ class MovieService:
                         lookup_query = MovieQuery(query.filename, movie.original_title or movie.title, movie.year or query.year)
                 else:
                     result.notes.append(f"{provider.source}: brak pewnego dopasowania tytułu i roku.")
-            except (ProviderError, ValueError) as error:
-                result.notes.append(f"{provider.source}: {error}")
+            except Exception as error:
+                expected = isinstance(error, (ProviderError, ValueError))
+                if not expected:
+                    logger.exception("Błąd źródła %s dla pliku %s", provider.source, query.filename)
+                detail = str(error) if expected else f"{type(error).__name__}: {error}"
+                result.notes.append(f"{provider.source}: {detail}")
         result.entries.sort(key=lambda movie: movie.source != "Filmweb")
         filmweb = result.entry_for("Filmweb")
         if filmweb and not self.cancelled():
             try:
                 result.vod = self.vod.lookup(filmweb.url)
-            except (ProviderError, ValueError) as error:
-                result.notes.append(f"Filmweb VOD: {error}")
+            except Exception as error:
+                expected = isinstance(error, (ProviderError, ValueError))
+                if not expected:
+                    logger.exception("Błąd VOD dla pliku %s", query.filename)
+                detail = str(error) if expected else f"{type(error).__name__}: {error}"
+                result.notes.append(f"Filmweb VOD: {detail}")
         return result

@@ -273,6 +273,26 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual([entry.rating for entry in result.entries], ["7.3", "8.1"])
         self.assertIn("Filmweb VOD: HTTP 403", result.notes)
 
+    def test_unexpected_provider_error_does_not_stop_other_source(self):
+        service, filmweb, imdb = self.make_service()
+        filmweb.search.side_effect = OSError(22, "Invalid argument")
+        imdb.search.return_value = MovieData("Film", "https://www.imdb.com/title/tt1", "IMDb", rating="8.1")
+        with self.assertLogs("moviecheck.service", level="ERROR"):
+            result = service.lookup(MovieQuery("Film.mkv", "Film"))
+        self.assertEqual(result.entry_for("IMDb").rating, "8.1")
+        self.assertIn("OSError", result.notes[0])
+
+    def test_unexpected_vod_error_preserves_movie_and_ratings(self):
+        service, filmweb, imdb = self.make_service()
+        filmweb.search.return_value = MovieData("Film", "https://www.filmweb.pl/film/Film-2000-1", "Filmweb", rating="7.3", description="Opis")
+        imdb.search.return_value = MovieData("Film", "https://www.imdb.com/title/tt1", "IMDb", rating="8.1")
+        service.vod.lookup.side_effect = OSError(22, "Invalid argument")
+        with self.assertLogs("moviecheck.service", level="ERROR"):
+            result = service.lookup(MovieQuery("Film.mkv", "Film"))
+        self.assertEqual([entry.rating for entry in result.entries], ["7.3", "8.1"])
+        self.assertEqual(result.description_entry.description, "Opis")
+        self.assertIn("Filmweb VOD: OSError", result.notes[0])
+
     def test_manual_imdb_link_also_checks_filmweb(self):
         service, filmweb, imdb = self.make_service()
         imdb.get_movie.return_value = MovieData("Correct movie", "https://www.imdb.com/title/tt1", "IMDb", 2020, rating="8.1")

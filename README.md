@@ -91,6 +91,12 @@ Przy ofertach podana jest data sprawdzenia. Filmweb VOD jest odpytywany dla znal
 
 Anulowanie czeka na zakończenie bieżącego żądania lub odebranie fragmentu odpowiedzi (limit bezczynności sieci wynosi 20 sekund dla stron i 30 sekund podczas pobierania zbioru IMDb). Import bazy także sprawdza żądanie anulowania. Niezakończone wyszukiwanie zostaje oznaczone jako raport częściowy. Przy próbie zamknięcia działającego wyszukiwania aplikacja rozpoczyna anulowanie i prosi o ponowne zamknięcie po zakończeniu żądania.
 
+Błąd jednego źródła nie blokuje pozostałych źródeł tego filmu. Nieoczekiwany błąd przetwarzania pojedynczego filmu zostaje zapisany w jego uwagach, a wyszukiwanie przechodzi do następnego pliku. Po sprawdzeniu całej listy raport zawiera zarówno znalezione dane, jak i pozycje wymagające sprawdzenia. Błąd filmu nie powoduje oznaczenia całego raportu jako częściowego, jeśli sprawdzono wszystkie pozycje.
+
+Jeśli błąd uniemożliwi pracę całej serii, np. nie uda się otworzyć pamięci danych, aplikacja zapisuje raport częściowy z dotychczasowymi wynikami przed pokazaniem komunikatu o przerwaniu. Gdy sam zapis HTML jest niemożliwy, wyniki pozostają w tabeli i można wybrać inne miejsce oraz użyć „Zapisz raport”.
+
+Nieoczekiwane błędy są zapisywane z nazwą pliku, źródłem i śladem wywołań w `errors.log`, obok `movies.sqlite3`. Na Windows jest to zwykle `%LOCALAPPDATA%\MovieCheck\MovieCheck\errors.log`. Dziennik ma limit 2 MB i dwie kopie rotacyjne. Brak dostępu do pliku diagnostycznego nie blokuje wyszukiwania. Daty VOD są porównywane bez konwersji przez systemowe znaczniki czasu, dzięki czemu wartości takie jak `9999-12-31` nie wywołują błędu Windows `OSError: [Errno 22] Invalid argument`.
+
 ## Źródła danych i ograniczenia
 
 Filmweb: wyszukiwanie korzysta z publicznego endpointu używanego przez stronę `/api/v1/live/search`, a podgląd filmu z `/api/v1/film/{id}/preview` pozwala zbudować jego adres. Opis, gatunki i ocena pochodzą z mikrodanych HTML lub JSON-LD strony filmu. Nie jest to gwarantowane ani wersjonowane publiczne API dla aplikacji zewnętrznych; zmiany witryny mogą wymagać aktualizacji adaptera. Próba na żywo 2026-10-27 potwierdziła wyszukanie i pobranie opisu oraz oceny filmu „Incepcja (2010)”.
