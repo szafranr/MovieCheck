@@ -66,6 +66,19 @@ class BuildTests(unittest.TestCase):
         self.assertNotIn("PYTHONPATH", environment)
         self.assertTrue(environment["PATH"].split(os.pathsep)[0].endswith("System32"))
 
+    def test_optional_interpreter_certificate_is_packaged_beside_ssl(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with patch.object(build_script.ssl, "__file__", str(root / "ssl.py")):
+                self.assertEqual(build_script.ssl_support_files(), [])
+                certificate = root / "codex-rejected-cas.pem"
+                certificate.write_text("public CA fixture", encoding="ascii")
+                self.assertEqual(build_script.ssl_support_files(), [(str(certificate), ".")])
+                for target in ("windows", "macos"):
+                    spec = build_script.spec_source(target, "0.1.11", root)
+                    self.assertIn(repr(str(certificate)), spec)
+                    ast.parse(spec)
+
     def test_cross_build_is_rejected_before_environment_changes(self):
         with patch.object(build_script.sys, "argv", ["build.py", "release", "--target", "macos"]), patch.object(build_script.sys, "platform", "win32"), patch.object(build_script, "setup_environment") as setup, redirect_stderr(io.StringIO()) as stderr:
             self.assertEqual(build_script.main(), 1)

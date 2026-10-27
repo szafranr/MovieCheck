@@ -1,5 +1,25 @@
 # Dziennik interakcji i prac
 
+## 2026-10-27 — Naprawa inicjalizacji SSL w EXE, wersja 0.1.11
+
+### Zgłoszenie użytkownika
+
+Użytkownik przekazał dwa wpisy errors.log z 15:36:16 i 15:36:40: uruchomienie wyszukiwania w EXE przerywa serię przy tworzeniu MovieService → WebProvider → httpx.Client → ssl.create_default_context → SSLContext.__new__, z FileNotFoundError.
+
+### Diagnoza i zmiany
+
+- Przed analizą użyto CodeGraph; sprawdzono źródła HTTPX, ssl.py interpretera budującego i listę zasobów PyInstaller. Standardowy zestaw certifi/cacert.pem był już obecny w EXE.
+- Konkretna przyczyna: dystrybucja Pythona użyta do budowania ma w SSLContext.__new__ dodatkowe ładowanie `codex-rejected-cas.pem` obok ssl.py. Plik ten nie był wcześniej dołączany do pakietu, co wywoływało błąd przed wysłaniem pierwszego żądania. Nie jest to błąd pojedynczego filmu.
+- Runner dołącza ten dodatkowy publiczny zasób CA, jeśli istnieje w interpreterze budującym, obok modułu ssl w pakiecie. Zwykły Python bez tego pliku nadal buduje się bez zmian. Konfiguracja sprawdzania certyfikatów HTTPS pozostaje włączona.
+- Test gotowego EXE/APP tworzy teraz MovieService wraz z oboma rzeczywistymi klientami HTTPS, bez połączeń sieciowych. Wykrywa więc błędy inicjalizacji TLS, których poprzedni test Qt/SQLite/HTML nie obejmował. Wynik zawiera pole tls.
+- Dodano regresję dla obecnego i nieobecnego opcjonalnego pliku CA oraz uwzględnienia go w specyfikacjach obu systemów. Zwiększono wersję jeden raz poleceniem build.py bump: 0.1.10 → 0.1.11. Uzupełniono README.
+
+### Weryfikacja
+
+- 88 testów jednostkowych i przepływu GUI zakończonych powodzeniem.
+- Zbudowano Windows EXE 0.1.11. Gotowy pakiet uruchomiony w pustym katalogu przeszedł test: ok, frozen, tls, qt, icon, sqlite i input mają wartość true; wygenerowano HTML. Plik wydania `dist/releases/MovieCheck-0.1.11-windows-x64.exe` otrzymał manifest i sumę SHA-256. Test TLS nie wysyłał zapytań do serwisów; sprawdza inicjalizację, przy której występował zgłoszony błąd.
+- macOS nie budowano na Windows. Iterację kończy lokalny commit; pliki examples i indeks .codegraph pozostają poza commitem.
+
 ## 2026-10-27 — Lokalizacja logów do zgłoszeń błędów
 
 ### Pytanie użytkownika

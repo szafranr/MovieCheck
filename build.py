@@ -8,6 +8,7 @@ import os
 import platform
 import re
 import shutil
+import ssl
 import subprocess
 import sys
 import tempfile
@@ -111,6 +112,13 @@ def windows_version_info(version: str) -> str:
 '''
 
 
+def ssl_support_files() -> list[tuple[str, str]]:
+    # Dystrybucja interpretera może ładować dodatkowy zestaw CA przy tworzeniu SSLContext.
+    # Zachowaj ten zasób obok ssl.py również w pakiecie PyInstaller.
+    certificate = Path(ssl.__file__).with_name("codex-rejected-cas.pem")
+    return [(str(certificate), ".")] if certificate.is_file() else []
+
+
 def spec_source(target: str, version: str, work: Path) -> str:
     if target not in ("windows", "macos"):
         raise ValueError("Nieznany system wydania.")
@@ -118,7 +126,7 @@ def spec_source(target: str, version: str, work: Path) -> str:
     source = f'''a = Analysis(
     [{str(ROOT / 'run.py')!r}], pathex=[{str(ROOT)!r}], binaries=[],
     datas=[({str(ROOT / 'moviecheck' / 'templates')!r}, 'moviecheck/templates'),
-           ({str(ROOT / 'moviecheck' / 'assets')!r}, 'moviecheck/assets')],
+           ({str(ROOT / 'moviecheck' / 'assets')!r}, 'moviecheck/assets')] + {ssl_support_files()!r},
     hiddenimports=[], hookspath=[], runtime_hooks=[],
     excludes=['PySide6.QtWebEngineCore', 'PySide6.QtWebEngineWidgets', 'PySide6.QtQml',
               'PySide6.QtQuick', 'PySide6.QtPdf', 'PySide6.QtPdfWidgets'], noarchive=False)

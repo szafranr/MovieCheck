@@ -21,6 +21,7 @@ def run_self_test(output: Path) -> int:
         from .inputs import load_queries
         from .models import MovieData, MovieResult
         from .report import write_report
+        from .service import MovieService
 
         application = QApplication.instance() or QApplication([])
         application.setApplicationName("MovieCheck")
@@ -38,6 +39,9 @@ def run_self_test(output: Path) -> int:
                 raise RuntimeError("Nieprawidłowe rozpoznawanie wejścia w pakiecie.")
             cache = MovieCache(root / "cache.sqlite3")
             try:
+                # Utworzenie klientów wykonuje inicjalizację TLS bez żądań sieciowych.
+                service = MovieService(cache)
+                service.close()
                 cache.put("test", {"value": 1})
                 if cache.get("test") != {"value": 1}:
                     raise RuntimeError("SQLite nie działa w pakiecie.")
@@ -49,7 +53,7 @@ def run_self_test(output: Path) -> int:
             html = report.read_text(encoding="utf-8")
             if "Opis testowy." not in html or f"MovieCheck {__version__}" not in html:
                 raise RuntimeError("Nieprawidłowy szablon raportu w pakiecie.")
-        result.update(ok=True, icon=True, qt=True, sqlite=True, report=str(report), input=True)
+        result.update(ok=True, icon=True, qt=True, sqlite=True, tls=True, report=str(report), input=True)
     except Exception as error:
         result["error"] = f"{type(error).__name__}: {error}"
     finally:
