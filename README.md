@@ -148,6 +148,36 @@ Testy jednostkowe i test przepływu okna Qt działają bez sieci. Test okna uruc
 
 Dokumentacja i komunikaty są po polsku, identyfikatory w kodzie po angielsku. Zależności i punkt wejścia `moviecheck` definiuje `pyproject.toml`.
 
-Możliwe dalsze pakowanie: `pyside6-deploy run.py`. Wydania należy budować i sprawdzać osobno na Windows i macOS. Podpisane instalatory oraz testy na macOS nie zostały jeszcze przygotowane. [Dokumentacja dystrybucji Qt for Python](https://doc.qt.io/qtforpython-6/deployment/index.html).
+## Dystrybucja bez instalowania Pythona
+
+PyInstaller może dołączyć interpreter, biblioteki Qt i kod aplikacji do wydania uruchamianego na komputerze bez Pythona. Windows i macOS wymagają osobnych kompilacji, przygotowanych na odpowiednim systemie i dla właściwej architektury. [Opis działania PyInstaller](https://pyinstaller.org/en/stable/operating-mode.html).
+
+### Windows — pojedynczy MovieCheck.exe
+
+W obecnym środowisku projektu dostępne jest `uv`, a `.venv` nie zawiera `pip`. W PowerShell, w katalogu projektu, można przygotować pakiet następująco:
+
+```powershell
+uv pip install --python .venv\Scripts\python.exe pyinstaller
+.\.venv\Scripts\python.exe -m PyInstaller --noconfirm --onefile --windowed --name MovieCheck --collect-data moviecheck --specpath build run.py
+```
+
+Oczekiwany wynik to `dist/MovieCheck.exe`. Ten plik można przekazać użytkownikowi bez katalogu `.venv` i źródeł. `--windowed` wyłącza okno konsoli, a `--collect-data moviecheck` dołącza szablon raportu HTML. Plik `.spec` i wyniki pracy trafiają do ignorowanych katalogów `build/` oraz `dist/`. [Opcje PyInstaller](https://pyinstaller.org/en/stable/usage.html).
+
+W środowisku przygotowanym standardowym `python -m venv`, z dostępnym `pip`, instalację narzędzia można zamiast `uv` wykonać poleceniem `.\.venv\Scripts\python.exe -m pip install pyinstaller`.
+
+Tryb `--onefile` rozpakowuje potrzebne biblioteki do katalogu tymczasowego przy uruchomieniu, więc start może trwać dłużej niż w wydaniu katalogowym. Pojedynczy plik programu nadal tworzy swoją pamięć SQLite i dziennik w systemowym katalogu danych użytkownika; raporty zapisuje w wybranym miejscu. Internet jest potrzebny do wyszukiwania, VOD, obrazów i pobrania zbioru ocen IMDb.
+
+### macOS — aplikacja MovieCheck.app
+
+Na Macu, po przygotowaniu środowiska opisanego wyżej:
+
+```sh
+.venv/bin/python -m pip install pyinstaller
+.venv/bin/python -m PyInstaller --noconfirm --onedir --windowed --name MovieCheck --collect-data moviecheck --specpath build run.py
+```
+
+Oczekiwany wynik to `dist/MovieCheck.app`. Finder pokazuje go jako jedną aplikację, chociaż technicznie jest to pakiet zawierający katalogi. Do pobrania można udostępnić go w ZIP lub obrazie DMG. PyInstaller odradza łączenie `--onefile` i `--windowed` dla aplikacji macOS; zalecany jest pakiet `.app` budowany w trybie `--onedir`. [Dokumentacja pakietów macOS](https://pyinstaller.org/en/stable/usage.html#building-macos-app-bundles).
+
+Powyższe polecenia stanowią instrukcję przygotowania wydania. Gotowego pliku EXE ani pakietu APP nie zbudowano jeszcze i nie zweryfikowano na czystym systemie. Przed przekazaniem wydania należy sprawdzić uruchomienie, odczyt TXT/katalogów i generowanie raportu z dołączonego szablonu. Podpisane instalatory oraz weryfikacja na rzeczywistym macOS pozostają dalszym etapem. Alternatywą jest `pyside6-deploy`; [dokumentacja Qt for Python](https://doc.qt.io/qtforpython-6/deployment/index.html).
 
 Instrukcje pracy znajdują się w `AGENTS.md`, a historia współpracy w `docs/INTERACTIONS.md`.

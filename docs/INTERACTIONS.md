@@ -1,5 +1,22 @@
 # Dziennik interakcji i prac
 
+## 2026-10-27 — Dystrybucja i pojedynczy plik wykonywalny
+
+### Pytanie użytkownika
+
+> jak dystrybuować tą aplikację? mozna uzsykać jeden plik wykonywalny?
+
+### Ustalenia i dokumentacja
+
+- Potwierdzono w aktualnej, oficjalnej dokumentacji PyInstaller możliwość zbudowania pojedynczego pliku Windows przez `--onefile --windowed`. Taki pakiet zawiera interpreter i biblioteki, więc odbiorca nie musi instalować Pythona.
+- Windows i macOS wymagają osobnych wydań. Dla macOS opisano `--onedir --windowed` i pakiet `.app`, widoczny w Finderze jako jedna aplikacja, możliwy do dystrybucji jako ZIP/DMG. Dokumentacja PyInstaller odradza jednoplikowy tryb dla okienkowego pakietu macOS.
+- Sprawdzono lokalne narzędzia: `uv` jest dostępne, `.venv` ma `ensurepip`, ale nie ma `pip` ani PyInstaller. Instrukcję Windows dostosowano do instalacji narzędzia przez `uv pip install --python .venv\Scripts\python.exe pyinstaller`.
+- Do polecenia budowania dodano `--collect-data moviecheck`, aby dołączyć szablon HTML, i `--specpath build`, aby wygenerowany plik specyfikacji nie trafiał do katalogu źródłowego.
+- README zawiera teraz instrukcję dla obu systemów, oczekiwane ścieżki wyników i informację o lokalnej pamięci użytkownika, dostępie do sieci oraz rozpakowywaniu bibliotek podczas uruchomienia pliku EXE.
+- Pytanie potraktowano jako prośbę o wyjaśnienie dystrybucji. Nie instalowano PyInstaller, nie budowano programu ani nie deklarowano przetestowanego wydania. Weryfikacja gotowego pakietu pozostaje etapem po jego zbudowaniu.
+- Źródła: `https://pyinstaller.org/en/stable/operating-mode.html`, `https://pyinstaller.org/en/stable/usage.html`.
+- Zmieniono tylko README i dziennik; iterację kończy lokalny commit dokumentacji, bez wysyłania zmian do repozytorium zdalnego.
+
 ## 2026-10-27 — Filmy opisane nazwą katalogu bez rozszerzenia
 
 ### Polecenie użytkownika
