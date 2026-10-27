@@ -235,6 +235,22 @@ Runner zatrzymuje budowanie po błędzie zadania. Po utworzeniu EXE/APP uruchami
 
 Gałąź macOS wymaga uruchomienia na rzeczywistym Macu; jej konfiguracja ma testy struktury specyfikacji, ale nie zastępuje to testu aplikacji na macOS. Podpisywanie wydania, notaryzacja Apple i instalatory nie są częścią tego runnera.
 
+## Publikowanie w GitHub Releases
+
+Pliki z `dist/releases/` dołącza się jako załączniki wydania GitHub, bez dodawania ich do Git. Wydania repozytorium: [MovieCheck Releases](https://github.com/szafranr/MovieCheck/releases).
+
+1. Wybierz zatwierdzony commit i numer wersji, np. `0.1.13`. Wyślij odpowiednie commity do GitHub (`git push origin main`, jeśli wydajesz main). Windows i Mac muszą budować ten sam commit i wersję.
+2. Na Windows uruchom `.\.venv\Scripts\python.exe build.py release --target windows`, a na Macu `.venv/bin/python build.py release --target macos`.
+3. Otwórz Releases → Draft a new release. W Choose a tag wpisz `v0.1.13`, wybierz Create new tag i ustaw Target na wydawany commit. Możesz wcześniej zapisać szkic, aby zebrać oba pakiety przed publikacją.
+4. Ustaw tytuł `MovieCheck 0.1.13`, opisz zmiany i dołącz pliki z `dist/releases/`: EXE Windows, ZIP macOS oraz odpowiadające im manifesty JSON i sumy SHA-256. Przykładowe nazwy: `MovieCheck-0.1.13-windows-x64.exe` i `MovieCheck-0.1.13-macos-arm64.zip`. Budowa na Macu Intel otrzyma inną architekturę w nazwie; pojedynczy build nie obejmuje automatycznie obu architektur Maca.
+5. Zapisz szkic przez Save draft albo opublikuj gotowy zestaw przez Publish release. Dla wersji testowej można zaznaczyć Pre-release. Odbiorcy pobierają programy z sekcji Assets; automatyczne Source code ZIP/TAR zawierają źródła.
+
+Nie łącz pod jednym tagiem starego EXE `0.1.11` z paczką macOS `0.1.13`: przebuduj oba z tej samej wersji. Samo budowanie ani publikacja istniejącego kodu nie podnosi wersji. Tag wskazuje konkretny stan kodu, z którego pochodzą paczki.
+
+Zadanie `release` w build.py przygotowuje pliki lokalnie; nie publikuje ich na GitHub. Publikację można później zautomatyzować przez GitHub Actions, uruchamiając runner osobno na Windows i macOS po dodaniu tagu. Taki workflow nie jest jeszcze częścią repozytorium.
+
+Źródło instrukcji interfejsu: [GitHub — zarządzanie wydaniami](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository).
+
 ## Wersja, ikona i zakończenie wyszukiwania
 
 Punktem początkowym jest `0.1.10`. Wersja ma dokładnie trzy człony `0.1.x`; kolejne iteracje zmieniające działanie aplikacji podnoszą tylko `x`, raz przed końcowym commitem. Jedynym źródłem jest `__version__` w `moviecheck/__init__.py`. Z tej wartości korzystają metadane pakietu Python, pasek tytułu, stopka raportu, metadane EXE/APP i nazwy plików wydania.

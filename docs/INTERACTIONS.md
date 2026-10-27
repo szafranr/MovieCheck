@@ -1,5 +1,22 @@
 # Dziennik interakcji i prac
 
+## 2026-10-27 — Polecenie budowania macOS i publikacja GitHub Releases
+
+### Pytania użytkownika
+
+> to jeszcze polecenie do budowania aplikacji dla macos
+
+> jak w github skorzystać z releases i tam wrzucać buildy dla windows i macos
+
+### Odpowiedź i dokumentacja
+
+- Przekazano polecenie `.venv/bin/python build.py release --target macos`, lokalizację APP i ZIP oraz `open dist/macos/MovieCheck.app`. Jest to instrukcja, bez deklaracji wykonania budowania na Macu.
+- Sprawdzono remote repozytorium i wersję 0.1.13 oraz oficjalną dokumentację GitHub Releases. README opisuje wysłanie zatwierdzonego kodu, budowanie obu systemów z tego samego commita, szkic wydania, tag v0.1.13, właściwy Target i załączniki EXE/ZIP/JSON/SHA-256.
+- Zaznaczono, że starego Windows EXE 0.1.11 nie należy publikować jako wersji 0.1.13; potrzebna jest ponowna budowa aktualnego kodu. APP jest dystrybuowane w ZIP, a architektura wynika z komputera budującego. Pliki buildów pozostają poza Git.
+- Wyjaśniono, że lokalne zadanie release nie publikuje do GitHub. Automatyzacja GitHub Actions jest możliwym kolejnym krokiem, ale nie tworzono workflow, tagów ani wydań i nie wysyłano plików ani commitów do GitHub.
+- Zmiany wyłącznie dokumentacji: wersja 0.1.13 pozostaje bez zmian, testów aplikacji nie ponawiano. Weryfikacja: diff dokumentacji i git diff --cached --check. Iterację kończy lokalny commit dziennika i README.
+- Źródło: https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository.
+
 ## 2026-10-27 — Potwierdzony Python 3.9.6 na Macu
 
 ### Informacja użytkownika
