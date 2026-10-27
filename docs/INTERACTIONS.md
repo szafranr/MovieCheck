@@ -1,5 +1,28 @@
 # Dziennik interakcji i prac
 
+## 2026-10-27 — Instrukcja publikacji MD i błąd testu podczas budowania macOS
+
+### Polecenie i materiał użytkownika
+
+> zapisz kroki publikacji w pliku MD
+> a tu wydruk z consoli dla próby zbudowania aplikacji macos
+
+Odczytano załączony Wklejony tekst.txt jako dane diagnostyczne, bez traktowania jego treści jako dodatkowych instrukcji.
+
+### Diagnoza i zmiany
+
+- Log pokazuje udaną instalację zależności dla Pythona 3.12 i wersji aplikacji 0.1.11. Budowanie zatrzymuje się po 88 testach z jednym błędem, przed uruchomieniem PyInstaller i tworzeniem APP/ZIP. Ostrzeżenie Qt o czcionce nie powoduje przerwania.
+- Użyto CodeGraph przed analizą build.run i testu izolacji Windows. Błąd jest w asercji testowej: przy symulacji win32 na macOS os.pathsep nadal wynosi dwukropek, więc dzielenie C:\Windows po separatorze zwraca jako pierwszy element C, zamiast pełnego katalogu System32.
+- Poprawiono test: sprawdza pełny prefiks katalogu systemowego i separator, bez rozbijania litery dysku. Ten sam test działa dla separatorów średnika i dwukropka, nadal kontrolując usunięcie obcych ścieżek DLL i PYTHONPATH. Kod aplikacji i sposób izolacji środowiska pozostają bez zmian.
+- Utworzono osobny docs/PUBLISHING.md: wysłanie kodu, zgodność commita i wersji na obu komputerach, polecenia budowania, artefakty, szkic GitHub Release, tag i Target, załączniki, publikacja i diagnostyka. Dodano odnośnik w README.
+- Zapisano sposób przechwycenia obu strumieni konsoli do build/build-macos.log. Przed ponowieniem należy dostarczyć aktualny commit na Maca; log pochodzi ze starszej wersji 0.1.11 niż lokalne 0.1.13.
+
+### Weryfikacja
+
+- Wszystkie 94 testy przeszły na Windows, w tym test izolacji z oboma separatorami i sześć testów skryptu macOS. Wynik w build/test-results.txt. Sprawdzono diff przed commitem.
+- Nie budowano APP na Windows i nie deklarowano udanej budowy na Macu. Pełne release należy ponowić na Macu z poprawką. Nie publikowano nic do GitHub ani nie wysyłano commitów.
+- Ponieważ zmiany obejmują wyłącznie testy i dokumentację, zgodnie z AGENTS.md wersja pozostaje 0.1.13. Iterację kończy lokalny commit; dane examples i indeks .codegraph pozostają poza commitem.
+
 ## 2026-10-27 — Polecenie budowania macOS i publikacja GitHub Releases
 
 ### Pytania użytkownika

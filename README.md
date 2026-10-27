@@ -237,6 +237,8 @@ Gałąź macOS wymaga uruchomienia na rzeczywistym Macu; jej konfiguracja ma tes
 
 ## Publikowanie w GitHub Releases
 
+Pełna instrukcja krok po kroku: [Publikowanie wydań](docs/PUBLISHING.md).
+
 Pliki z `dist/releases/` dołącza się jako załączniki wydania GitHub, bez dodawania ich do Git. Wydania repozytorium: [MovieCheck Releases](https://github.com/szafranr/MovieCheck/releases).
 
 1. Wybierz zatwierdzony commit i numer wersji, np. `0.1.13`. Wyślij odpowiednie commity do GitHub (`git push origin main`, jeśli wydajesz main). Windows i Mac muszą budować ten sam commit i wersję.

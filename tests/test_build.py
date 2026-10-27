@@ -59,12 +59,17 @@ class BuildTests(unittest.TestCase):
         self.assertIn("'FileVersion', '0.1.10'", resource)
 
     def test_isolated_windows_run_excludes_foreign_dll_search_paths(self):
-        with patch.object(build_script.sys, "platform", "win32"), patch.dict(os.environ, {"PATH": "foreign-dlls", "PYTHONPATH": "foreign-python"}), patch.object(build_script.subprocess, "run") as execute:
-            build_script.run(["python.exe", "--version"], isolated=True)
-        environment = execute.call_args.kwargs["env"]
-        self.assertNotIn("foreign-dlls", environment["PATH"])
-        self.assertNotIn("PYTHONPATH", environment)
-        self.assertTrue(environment["PATH"].split(os.pathsep)[0].endswith("System32"))
+        # Symulacja Windows na POSIX nie zmienia dwukropka w literze dysku.
+        # Sprawdzaj pełny prefiks, zamiast rozdzielać C:\Windows separatorem POSIX.
+        for separator in (";", ":"):
+            with self.subTest(separator=separator):
+                with patch.object(build_script.sys, "platform", "win32"), patch.object(os, "pathsep", separator), patch.dict(os.environ, {"PATH": "foreign-dlls", "PYTHONPATH": "foreign-python", "SystemRoot": r"C:\Windows"}), patch.object(build_script.subprocess, "run") as execute:
+                    build_script.run(["python.exe", "--version"], isolated=True)
+                environment = execute.call_args.kwargs["env"]
+                self.assertNotIn("foreign-dlls", environment["PATH"])
+                self.assertNotIn("PYTHONPATH", environment)
+                system_directory = str(Path(r"C:\Windows") / "System32")
+                self.assertTrue(environment["PATH"].startswith(system_directory + separator))
 
     def test_optional_interpreter_certificate_is_packaged_beside_ssl(self):
         with tempfile.TemporaryDirectory() as directory:
