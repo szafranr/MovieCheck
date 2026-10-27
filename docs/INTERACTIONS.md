@@ -1,5 +1,19 @@
 # Dziennik interakcji i prac
 
+## 2026-10-27 — Potwierdzony Python 3.9.6 na Macu
+
+### Informacja użytkownika
+
+> .venv/bin/python --version
+> Python 3.9.6
+
+### Odpowiedź i dokumentacja
+
+- Potwierdzono, że interpreter jest starszy od wymaganego Python 3.11. Aktualizacja samego pip nie rozwiąże tego problemu.
+- Sprawdzono oficjalną formułę Homebrew python@3.12 i stronę instalatorów macOS Python.org. Podano instalację Python 3.12 przez Homebrew (jeśli dostępne), zachowanie starego środowiska pod osobną nazwą i jawne utworzenie nowego przez python3.12 -m venv .venv. Nie trzeba zmieniać systemowego Pythona ani domyślnego python3.
+- Uzupełniono README o pełne polecenia. Nie uruchamiano ich na komputerze użytkownika i nie deklarowano instalacji na Macu. Zmieniono tylko dokumentację, bez podwyższania wersji 0.1.13; nie było potrzeby ponawiania testów kodu.
+- Źródła: https://formulae.brew.sh/formula/python@3.12 oraz https://www.python.org/downloads/macos/. Iterację kończy lokalny commit dokumentacji i dziennika.
+
 ## 2026-10-27 — Aktualizacja pip przed instalacją edytowalną, wersja 0.1.13
 
 ### Zgłoszenie użytkownika

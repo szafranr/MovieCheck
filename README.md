@@ -67,6 +67,22 @@ python3 -m venv .venv
 ```
 
 Błąd „setup.py or setup.cfg not found” przy obecnym `pyproject.toml` i starym `pip 21.2.4` wymaga aktualizacji pip powyższym poleceniem. Jeśli `.venv/bin/python --version` pokazuje mniej niż 3.11, najpierw zainstaluj nowszego Pythona i utwórz nim nowe środowisko; aktualizacja pip nie zmienia wersji interpretera.
+
+Przykład przejścia z Pythona 3.9.6 na 3.12, jeśli na Macu masz Homebrew ([formuła Python 3.12](https://formulae.brew.sh/formula/python@3.12)):
+
+```sh
+brew install python@3.12
+cd /Users/robert/Projekty/MovieCheck
+mv .venv ".venv-python39-$(date +%s)"
+python3.12 -m venv .venv
+.venv/bin/python --version
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install -e .
+.venv/bin/python -m moviecheck
+```
+
+Zachowane stare środowisko jest wyłącznie kopią lokalną — nie dodawaj go do Git. Nie trzeba zmieniać systemowego Pythona ani domyślnego `python3`; nowe `.venv` korzysta z jawnie wybranego `python3.12`. Bez Homebrew można zainstalować Python 3.12 lub 3.13 z [oficjalnych instalatorów macOS](https://www.python.org/downloads/macos/) i użyć odpowiedniego polecenia wersji do utworzenia `.venv`.
+
  Plik `start_macos.command` ma w Git uprawnienie wykonywania i zakończenia linii LF; można go otworzyć również dwuklikiem w Finderze.
 
 ## Przygotowanie listy TXT
