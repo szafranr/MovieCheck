@@ -1,5 +1,20 @@
 # Dziennik interakcji i prac
 
+## 2026-10-27 — Nierozpoznane polecenie `py`
+
+### Zgłoszenie użytkownika
+
+Użytkownik uruchomił `py -3 -m venv .venv`; PowerShell zgłosił, że `py` nie jest rozpoznawanym poleceniem.
+
+### Ustalenia i zmiany
+
+- Potwierdzono obecność `.venv\Scripts\python.exe` i jego działanie: Python 3.12.14. Nie ma potrzeby ponownego tworzenia istniejącego środowiska.
+- Wskazano bezpośrednie uruchamianie `.venv\Scripts\python.exe -m moviecheck` lub plik `start_windows.cmd`.
+- Uzupełniono README o rozróżnienie uruchamiania przygotowanej aplikacji i instalacji na nowym komputerze oraz alternatywę dla nieobecnego launchera `py`.
+- Potwierdzono lokalne repozytorium Git na gałęzi `main`, śledzącej `origin/main`, oraz zdalne repozytorium `https://github.com/szafranr/MovieCheck.git`.
+- W katalogu pojawiło się nieśledzone `.codegraph/`. Nie modyfikowano go ani nie dodawano do commita. Ta iteracja dotyczy dokumentacji, bez analizy i zmiany kodu.
+- Iterację kończy lokalny commit obejmujący README i dziennik; wysyłanie zmian do zdalnego repozytorium nie jest częścią tej operacji.
+
 ## 2026-10-27 — Dodanie projektu do Git
 
 ### Polecenie użytkownika

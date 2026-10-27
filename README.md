@@ -20,6 +20,15 @@ Wymagany Python 3.11 lub nowszy, z obsługiwaną przez PySide6 wersją systemu i
 
 Windows, PowerShell, w katalogu projektu:
 
+Jeśli `.venv` zostało już przygotowane, uruchom od razu aplikację — nie twórz środowiska ponownie:
+
+```powershell
+cd D:\Projekty\MovieCheck
+.\.venv\Scripts\python.exe -m moviecheck
+```
+
+Poniższe kroki są potrzebne przy pierwszej instalacji na nowym komputerze. Polecenie `py` wymaga launchera Pythona. Jeśli nie jest rozpoznawane, ale `python --version` zwraca wersję 3.11 lub nowszą, zastąp pierwszą linię poleceniem `python -m venv .venv`. Jeśli żadne z tych poleceń nie uruchamia Pythona, trzeba najpierw zainstalować interpreter lub wskazać pełną ścieżkę do już zainstalowanego `python.exe`.
+
 ```powershell
 py -3 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e .
