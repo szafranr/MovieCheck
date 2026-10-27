@@ -8,15 +8,18 @@ Okienkowa aplikacja w Pythonie i PySide6 (Qt) do tworzenia katalogu filmów na p
 - Odczyt prostych list nazw, typowego `ls -l` i tabelarycznego wyniku PowerShell `ls`.
 - Obsługa UTF-8, UTF-16 z BOM i awaryjnie Windows-1250.
 - Rozpoznawanie tytułu i roku; usuwanie typowych oznaczeń jakości, kodeków i wydania.
-- Wyszukiwanie najpierw w Filmweb, a przy braku opisu lub wyniku próba IMDb.
+- Niezależne wyszukiwanie w Filmweb i IMDb, z osobną oceną każdego serwisu. Opis z Filmweb ma pierwszeństwo.
+- Dostępność VOD w Polsce: tylko abonamenty, z logotypami platform i linkami do ofert; bez wypożyczeń i zakupu.
 - Podgląd wyników, poprawianie tytułu i roku oraz ręczne wskazanie linku do filmu.
 - Pobieranie w osobnym wątku, postęp i anulowanie z raportem częściowym.
-- Lokalna pamięć danych SQLite ważna przez 7 dni, którą można wyłączyć.
+- Lokalna pamięć SQLite: dane filmów i ocen do 7 dni, dostępność VOD do 6 godzin; bufor wyników można wyłączyć.
 - Raport HTML z klikalną okładką po lewej, tytułem będącym linkiem, ocenami, gatunkami, krótkim opisem i źródłami po prawej. Tekst działa po zapisaniu bez Internetu; okładki są ładowane z adresów źródłowych i wymagają połączenia z siecią.
 
 ## Wymagania i instalacja
 
 Wymagany Python 3.11 lub nowszy, z obsługiwaną przez PySide6 wersją systemu i architekturą. Dostęp do Internetu jest potrzebny podczas instalacji i pobierania danych.
+
+Przy pierwszym odczycie niezależnej oceny IMDb aplikacja może pobrać oficjalny zbiór `title.ratings.tsv.gz` (około 9 MB według próby z 2026-10-27) i przygotować lokalny indeks SQLite. Ta operacja trwa dłużej niż zwykłe wyszukiwanie, a postęp przygotowania jest opisany pod tabelą. Zbiór jest odświeżany najpóźniej po 7 dniach; kolejne oceny są odczytywane z lokalnego indeksu. Dane IMDb przeznaczone są do użytku osobistego i niekomercyjnego, zgodnie z [zasadami udostępniania IMDb](https://data.imdb.com/non-commercial-datasets/).
 
 Windows, PowerShell, w katalogu projektu:
 
@@ -80,23 +83,31 @@ Okładka w raporcie jest linkiem do strony filmu u dostawcy obrazu. Aplikacja od
 
 Starsze wpisy lokalnej pamięci, które nie zawierają jeszcze pola okładki, są uzupełniane podczas kolejnego wyszukiwania. Jeśli serwis jest wtedy niedostępny, zachowywane są dotychczasowe opisy i oceny.
 
-Anulowanie czeka na zakończenie bieżącego żądania HTTP (limit czasu sieci do 20 sekund bezczynności). Niezakończone wyszukiwanie zostaje oznaczone jako raport częściowy. Przy próbie zamknięcia działającego wyszukiwania aplikacja rozpoczyna anulowanie i prosi o ponowne zamknięcie po zakończeniu żądania.
+W tabeli i raporcie zawsze są dwie osobne pozycje ocen: Filmweb i IMDb. Brak oceny jednego źródła nie powoduje zastąpienia jej oceną drugiego. Błąd VOD nie usuwa pobranych ocen ani opisów.
+
+Sekcja „Dostępny w abonamencie · Polska” pojawia się tylko po potwierdzeniu ofert abonamentowych Filmweb. Logotyp i nazwa platformy są linkiem do oferty filmu. Uwzględniane są aktywne oferty z płatnością oznaczoną jako subskrypcja; gdy Filmweb nie podaje ceny pojedynczego filmu, wymagane są jawne dane abonamentu platformy. Jawne wypożyczenie, zakup lub darmowa oferta bez subskrypcji nie są uznawane za abonament. Oferty nieaktywne, wygasłe i zaplanowane na przyszłość są pomijane. Abonamenty kanałów w innych platformach, np. SkyShowtime w Prime Video lub HBO w Canal+, są oznaczone „Dodatkowy abonament / pakiet”; nie oznaczają dostępu w podstawowym planie Prime lub Canal+.
+
+Przy ofertach podana jest data sprawdzenia. Filmweb VOD jest odpytywany dla znalezionego filmu, a nie na podstawie ogólnej listy platform. Brak sekcji nie jest gwarancją niedostępności — może oznaczać brak znalezionego filmu w Filmweb lub błąd odczytu, widoczny w uwagach wyniku. Dostępność może się zmieniać. Logo, podobnie jak plakat, wymaga dostępu do Internetu; nazwa platformy pozostaje widoczna także bez obrazu.
+
+Anulowanie czeka na zakończenie bieżącego żądania lub odebranie fragmentu odpowiedzi (limit bezczynności sieci wynosi 20 sekund dla stron i 30 sekund podczas pobierania zbioru IMDb). Import bazy także sprawdza żądanie anulowania. Niezakończone wyszukiwanie zostaje oznaczone jako raport częściowy. Przy próbie zamknięcia działającego wyszukiwania aplikacja rozpoczyna anulowanie i prosi o ponowne zamknięcie po zakończeniu żądania.
 
 ## Źródła danych i ograniczenia
 
 Filmweb: wyszukiwanie korzysta z publicznego endpointu używanego przez stronę `/api/v1/live/search`, a podgląd filmu z `/api/v1/film/{id}/preview` pozwala zbudować jego adres. Opis, gatunki i ocena pochodzą z mikrodanych HTML lub JSON-LD strony filmu. Nie jest to gwarantowane ani wersjonowane publiczne API dla aplikacji zewnętrznych; zmiany witryny mogą wymagać aktualizacji adaptera. Próba na żywo 2026-10-27 potwierdziła wyszukanie i pobranie opisu oraz oceny filmu „Incepcja (2010)”.
 
-IMDb: adapter przeszukuje odnośniki stron filmów i odczytuje ich JSON-LD. Próba na żywo 2026-10-27 w tym środowisku zakończyła się pustą odpowiedzią HTTP 202 dla strony filmu i wyszukiwarki. Dlatego działanie pełnego uzupełniania danych z IMDb nie zostało potwierdzone; aplikacja jawnie zapisuje ten błąd w uwagach wyniku. Adapter nie omija blokad, CAPTCHA ani logowania. [Warunki korzystania z danych IMDb](https://help.imdb.com/article/imdb/general-information/can-i-use-imdb-data-in-my-software/G5JTRESSHJBBHTGX) ograniczają automatyczne pobieranie stron; dla stałej integracji należy ustalić odpowiedni dostęp do danych.
+IMDb: adapter korzysta z publicznych podpowiedzi tytułów IMDb do rozpoznania identyfikatora i roku. Ocenę pobiera ze strony filmu, jeśli jest ona dostępna, a przy odmowie dostępu z oficjalnego zbioru `title.ratings.tsv.gz`, identyfikując film po jego numerze IMDb. Dzięki temu odpowiedź HTTP 202 lub 403 strony nie blokuje odczytu niezależnej oceny. Zbiór nie zawiera opisów fabuły, więc uzupełnienie opisu IMDb nadal zależy od dostępności strony. Adapter nie omija blokad, CAPTCHA ani logowania. Źródło oceny jest opisane po wskazaniu jej w raporcie kursorem. [Dokumentacja danych IMDb](https://data.imdb.com/non-commercial-datasets/).
 
-Opis z IMDb może być po angielsku; aplikacja nie tłumaczy fabuły. Znane angielskie gatunki są tłumaczone na polskie nazwy. Gdy Filmweb zawiera opis, IMDb nie jest odpytywane, więc raport nie zawsze zawiera obie oceny. Źródła ocen, gatunków i opisu są oznaczone osobno. Brak danych nie jest zastępowany wymyśloną treścią.
+Opis z IMDb może być po angielsku; aplikacja nie tłumaczy fabuły. Znane angielskie gatunki są tłumaczone na polskie nazwy. IMDb jest odpytywane również wtedy, gdy Filmweb zawiera już opis i ocenę. Ręczne wskazanie linku w dowolnym z tych serwisów zachowuje próbę znalezienia drugiego źródła. Źródła ocen, gatunków i opisu są oznaczone osobno. Brak danych nie jest zastępowany wymyśloną treścią.
 
 Przy dopasowywaniu sprawdzanych jest do pięciu wyników dla wariantu zapytania. Apostrofy proste i typograficzne są pomijane w porównaniu: `Bettys Revenge`, `Betty's Revenge` i `Betty’s Revenge` są równoważne. Pozostała interpunkcja nadal rozdziela słowa. Tytuł polski lub oryginalny musi być dostatecznie podobny, a dostępny rok zgodny. Zbliżone wyniki wymagają ręcznego wskazania linku.
 
 Gdy pierwsze zapytanie nie daje dopasowania, wyszukiwarki otrzymują także pomocnicze warianty: z ujednoliconym apostrofem, bez apostrofu lub z apostrofem przed końcowym `s` wyrazu, np. `Bettys` → `Betty's`. Ten ostatni wariant jest heurystyką, a nie automatyczną zmianą tytułu. Sprawdzane są maksymalnie cztery unikalne warianty; pierwszy prawidłowy wynik kończy wyszukiwanie. Kontrola roku i niejednoznaczności pozostaje aktywna. Nie są przy tym dodawane ani usuwane słowa tytułu.
 
-Program wykonuje żądania kolejno, w odstępach co najmniej 1,1 s w obrębie dostawcy. Błąd dostępu, pusta odpowiedź HTTP 202 lub niejednoznaczność przerywają próby danego dostawcy — nie są traktowane jako brakujący apostrof. Zmiana zapisu tytułu nie rozwiązuje blokady pobierania danych IMDb.
+Program wykonuje żądania kolejno, w odstępach co najmniej 1,1 s w obrębie dostawcy. Błędy dostępu i pusta odpowiedź HTTP 202 nie są ponawiane jako warianty zapisu tytułu; w przypadku IMDb ocenę można nadal odczytać z oficjalnego zbioru danych. Niejednoznaczny wynik wymaga ręcznego dopasowania. Zmiana zapisu tytułu nie rozwiązuje blokady odczytu opisu ze strony IMDb.
 
-Lokalna pamięć wyników znajduje się w systemowym katalogu danych aplikacji MovieCheck. Usunięcie pliku `movies.sqlite3` przy zamkniętej aplikacji czyści pamięć. Nazwy plików są przetwarzane lokalnie, a do serwisów trafiają zapytania z tytułem i ewentualnym rokiem; same pliki wideo nie są wysyłane.
+W podpowiedziach IMDb wynik z potwierdzonym rokiem ma pierwszeństwo przed tytułem bez roku. Skrócona nazwa wyświetlana przez IMDb, np. „Glass Onion” zamiast „Glass Onion: A Knives Out Mystery”, jest dopuszczana wyłącznie przy identycznym tytule głównym przed dwukropkiem i znanym, zgodnym roku. Tytuł główny musi mieć co najmniej 8 znaków po normalizacji; nie jest stosowane dowolne usuwanie słów. Kilka równie dobrych wyników nadal wymaga wskazania właściwego linku.
+
+Lokalna pamięć wyników i indeks ocen IMDb znajdują się w pliku `movies.sqlite3` w systemowym katalogu danych aplikacji MovieCheck. Usunięcie tego pliku przy zamkniętej aplikacji czyści pamięć oraz indeks, który zostanie ponownie pobrany, gdy będzie potrzebny. Wyłączenie bufora omija zapisane rekordy filmów i VOD oraz odświeża zbiór ocen IMDb raz na serię wyszukiwania, jeśli jest on potrzebny. Nazwy plików są przetwarzane lokalnie, a do serwisów trafiają zapytania z tytułem i ewentualnym rokiem; same pliki wideo nie są wysyłane.
 
 ## Testy i diagnostyka
 
@@ -106,6 +117,7 @@ Windows:
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 .\.venv\Scripts\python.exe scripts\check_sources.py
 .\.venv\Scripts\python.exe scripts\build_example.py --screenshot
+.\.venv\Scripts\python.exe scripts\build_example.py --input moja-lista.txt --limit 3 --screenshot
 ```
 
 macOS: użyj `.venv/bin/python` i ukośników `/` w ścieżkach.
@@ -118,6 +130,8 @@ Testy jednostkowe i test przepływu okna Qt działają bez sieci. Test okna uruc
 - `moviecheck/inputs.py` — odczyt wejścia i rozpoznawanie nazw.
 - `moviecheck/providers.py` — adaptery Filmweb/IMDb oraz dopasowanie filmów.
 - `moviecheck/service.py` — kolejność źródeł i uzupełnianie braków.
+- `moviecheck/imdb.py` — rozpoznawanie tytułów IMDb i oficjalna baza ocen.
+- `moviecheck/vod.py` — weryfikacja abonamentów Filmweb dla Polski.
 - `moviecheck/cache.py` — pamięć SQLite.
 - `moviecheck/report.py`, `moviecheck/templates/report.html` — raport HTML.
 - `tests/` — testy bez dostępu do sieci.

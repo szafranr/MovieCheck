@@ -1,5 +1,39 @@
 # Dziennik interakcji i prac
 
+## 2026-10-27 — Abonamenty VOD i dwie niezależne oceny
+
+### Polecenie użytkownika
+
+> w serwisie filmweb jest informacja, czy dany film jest dostępny w VOD. Dodaj sprawdzanie tego i jak jest dostępny, to dodaj taka informację do sprawdzanego filmu, ale tylko jak jest w ramach subskrypcji, a nie wypożyczenia. moga to być małe loga netflix, prime, skyhowtime, appleTV itd.
+> dodaj niezalezne oceny z filmweb i imdb (dwie pozycje)
+
+### Ustalenia na podstawie rzeczywistych źródeł
+
+- Użyto CodeGraph przed analizą modeli, parserów, logiki źródeł, raportu i okna Qt. Dodatkowo odczytano pliki, których CodeGraph nie zwrócił w komplecie.
+- Sprawdzono publiczną stronę Filmweb `/film/Incepcja-2010-500891/vod` oraz jej żądania w izolowanej przeglądarce. Oferty filmu pochodzą z `/api/v1/vod/film/{id}/providers/list?countryCode=PL`, a metadane platform i logotypy z `/api/v1/vod/providers/list?countryCode=PL`.
+- Filmweb jawnie oznacza w płatnościach `subscription`, `rent`, `buy` i `free`. Część ofert abonamentowych, np. HBO Max, nie ma osobnej płatności za film, ale platforma ma pole `abonaments` z cenami abonamentu. Dostępność nie może być wnioskowana z samej nazwy platformy ani z listy wszystkich dostawców w stopce strony.
+- Bezpośrednie strony IMDb nadal zwracają odmowę dostępu lub pustą odpowiedź. Potwierdzono natomiast działanie publicznych podpowiedzi tytułów IMDb i dostępność oficjalnego `https://datasets.imdbws.com/title.ratings.tsv.gz` o rozmiarze 8 721 264 bajtów w chwili sprawdzenia. Dokumentacja: `https://data.imdb.com/non-commercial-datasets/`.
+
+### Wykonane zmiany
+
+- Dodano `VodOffer`, `VodAvailability` i moduł `moviecheck/vod.py`. Wybierane są aktywne, niewygasłe i już rozpoczęte oferty dla Polski. Wymagana jest jawna subskrypcja w płatności albo brak osobnej płatności oraz potwierdzony, dodatni abonament platformy. Wypożyczenia, zakup, darmowe oferty bez subskrypcji i nierozpoznane typy nie są promowane do abonamentów.
+- Logotyp i nazwa platformy prowadzą do oferty filmu. Abonamenty kanałów w innych platformach są opisane jako dodatkowy abonament/pakiet, a nie dostęp w podstawowym planie. Raport pokazuje datę sprawdzenia i kraj. Oferty są buforowane do 6 godzin, metadane platform do 7 dni. Błąd odczytu VOD nie usuwa opisów ani ocen.
+- Zmieniono wyszukiwanie na niezależne sprawdzanie Filmweb i IMDb, również gdy pierwszy serwis ma już opis. W raporcie zawsze są dwie pozycje ocen, a w Qt osobne kolumny Filmweb i IMDb oraz kolumna VOD. Brak oceny nie jest zastępowany oceną innego serwisu.
+- Dodano `moviecheck/imdb.py`: rozpoznawanie identyfikatora przez podpowiedzi IMDb oraz awaryjny odczyt oceny z oficjalnego zbioru IMDb. Zbiór jest pobierany strumieniowo, importowany partiami do indeksu SQLite i odświeżany do 7 dni; anulowanie lub błędne dane nie zastępują poprzedniej bazy. Niedostępność pobierania nie powoduje ponawiania całego zbioru dla każdego filmu. Okno pokazuje komunikaty przygotowania bazy.
+- Bufor pojedynczego filmu nie wydłuża świeżości zbioru ocen IMDb. Wyłączenie bufora odświeża potrzebny zbiór raz na serię wyszukiwania. Rekord z samym identyfikatorem IMDb i bez rozpoznanego tytułu nie nadpisuje późniejszego, poprawnego rozpoznania.
+- W IMDb potwierdzony rok ma pierwszeństwo przed wynikiem bez roku. Dodano ostrożną obsługę skróconego tytułu przed dwukropkiem (np. Glass Onion), wymagając identycznego tytułu głównego, co najmniej 8 znaków i znanego, zgodnego roku. Nadal odrzucane są niejednoznaczne wyniki, seriale i odcinki.
+- W raporcie zamieszczono wymagane wskazanie IMDb jako źródła i informację o osobistym, niekomercyjnym użyciu danych. README opisuje pierwsze pobranie, źródła, ograniczenia opisów IMDb, okresy pamięci oraz zasady abonamentów.
+- Skrypty diagnostyczne dostosowano do nowego dostawcy IMDb. Generator przykładu przyjmuje osobną listę `--input` i ograniczenie `--limit`, aby weryfikować krótki zestaw bez zmieniania list użytkownika.
+
+### Weryfikacja
+
+- 57 testów zakończyło się sukcesem: zachowane testy wejścia, tytułów, plakatów i raportu oraz nowe przypadki abonamentów, wykluczenia płatności, dat i kraju, odświeżania VOD, niezależności ocen, awarii źródeł, podpowiedzi i aliasów IMDb, importu/anulowania/świeżości bazy i całego przepływu Qt. Sprawdzenie składni modułów zakończyło się bez błędów.
+- Próba na żywo potwierdziła obie oceny i abonamenty: „Glass Onion” — Filmweb 6,6 i IMDb 7.1, Netflix; „Incepcja” — Filmweb 8,2 i IMDb 8.8, HBO Max oraz dodatkowy abonament HBO w Canal+; „Wąwóz / The Gorge” — Filmweb 6,2 i IMDb 6.7, Apple TV. Wypożyczenia obecne w odpowiedzi Filmweb nie trafiły do raportu.
+- W Edge sprawdzono faktyczne załadowanie wszystkich logotypów i plakatów, dwie liczbowe oceny przy każdym filmie, proporcje i położenie plakatów oraz brak błędów JavaScript. Kontrola wykryła początkowo rozszerzanie siatki na wąskim ekranie; poprawiono szerokość kolumny i zawijanie nazw ofert. Końcowy test dla 390 px nie wykazał przewijania poziomego.
+- Obejrzano końcowy zrzut `build/report-posters.png`. Aktualny raport z rzeczywistymi wynikami znajduje się w `build/lista.html`; podgląd Qt w `build/app-preview.png`. Dane i skrypty pomocnicze w `build/` nie są wersjonowane.
+- Podczas pracy pojawiły się zmiany użytkownika w `examples/lista.txt` oraz plik `examples/180.txt`. Pierwsza diagnostyka wczytała rozszerzoną listę; zatrzymano wyłącznie własny proces diagnostyczny i dalsze próby wykonano na osobnym `build/validation-vod.txt`. Zmiany list użytkownika i `.codegraph/` pozostawiono poza commitem.
+- Iterację kończy lokalny commit kodu, testów, skryptów diagnostycznych i dokumentacji, bez wysyłania do zdalnego repozytorium.
+
 ## 2026-10-27 — Okładki po lewej stronie raportu
 
 ### Polecenie użytkownika

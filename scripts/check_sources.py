@@ -5,6 +5,7 @@ import tempfile
 from pathlib import Path
 
 from moviecheck.cache import MovieCache
+from moviecheck.imdb import IMDbProvider
 from moviecheck.models import MovieQuery
 from moviecheck.providers import ProviderError, WebProvider
 
@@ -16,7 +17,7 @@ def main():
             ("Filmweb", "https://www.filmweb.pl/film/Incepcja-2010-500891"),
             ("IMDb", "https://www.imdb.com/title/tt1375666"),
         ):
-            provider = WebProvider(source, cache)
+            provider = WebProvider(source, cache) if source == "Filmweb" else IMDbProvider(cache)
             try:
                 for operation, action in (
                     ("direct", lambda: provider.get_movie(url)),

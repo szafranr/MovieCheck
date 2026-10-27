@@ -15,7 +15,8 @@
     h1 { font-size: clamp(26px, 5vw, 42px); line-height: 1.2; overflow-wrap: anywhere; margin: 8px 0 16px; }
     h2 { font-size: 22px; margin: 0 0 10px; }
     a { color: var(--accent); text-underline-offset: 4px; }
-    ol { list-style: none; padding: 0; display: grid; gap: 18px; }
+    ol { list-style: none; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
+    li { min-width: 0; }
     article { display: flex; align-items: stretch; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
     .movie-content { flex: 1; min-width: 0; padding: 24px; }
     .poster-link { display: block; position: relative; flex: 0 0 var(--poster-width, 160px); max-width: 38%; background: var(--background); }
@@ -25,6 +26,14 @@
     .meta, .filename, footer, .source { color: var(--muted); font-size: 14px; }
     .ratings { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
     .badge { border: 1px solid var(--border); padding: 3px 10px; border-radius: 6px; font-size: 14px; }
+    .vod { margin: 16px 0; }
+    .vod-label { font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+    .vod-offers { display: flex; flex-wrap: wrap; gap: 8px; }
+    .vod-offer { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; min-width: 0; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; text-decoration: none; color: var(--text); font-size: 13px; }
+    .vod-offer span { min-width: 0; overflow-wrap: anywhere; }
+    .vod-offer img { flex: none; width: 44px; height: 26px; object-fit: contain; background: #fff; border-radius: 4px; padding: 3px; }
+    .vod-offer small { display: block; color: var(--muted); font-size: 11px; }
+    .vod-checked { margin-top: 5px; color: var(--muted); font-size: 11px; }
     .filename { overflow-wrap: anywhere; }
     .description { white-space: pre-line; }
     .notice { border-left: 3px solid #b47719; padding-left: 12px; }
@@ -58,12 +67,29 @@
         {% if movie and movie.year %} ({{ movie.year }}){% elif result.query.year %} ({{ result.query.year }}){% endif %}
       </h2>
       <div class="ratings">
-      {% for entry in result.entries %}
-        <span class="badge">{{ entry.source }}: {% if entry.rating %}{{ entry.rating }} / {{ entry.rating_scale }}{% else %}brak oceny{% endif %}</span>
+      {% for source_name in ['Filmweb', 'IMDb'] %}
+        {% set entry = result.entry_for(source_name) %}
+        <span class="badge"{% if entry and entry.rating_source %} title="{{ entry.rating_source }}"{% endif %}>{{ source_name }}: {% if entry and entry.rating %}{{ entry.rating }} / {{ entry.rating_scale }}{% else %}brak oceny{% endif %}</span>
       {% endfor %}
       </div>
       {% set genre_entry = result.entries|selectattr('genres')|first %}
       <div>{% if genre_entry %}{{ genre_entry.genres|genres }} <span class="source">({{ genre_entry.source }})</span>{% else %}Gatunek: brak danych{% endif %}</div>
+      {% if result.vod.offers %}
+      <div class="vod">
+        <div class="vod-label">Dostępny w abonamencie · Polska</div>
+        <div class="vod-offers">
+        {% for offer in result.vod.offers %}
+          {% set offer_url = offer.url|image_url %}
+          {% set logo_url = offer.logo_url|image_url %}
+          {% if offer_url %}<a class="vod-offer" href="{{ offer_url }}" target="_blank" rel="noopener noreferrer">
+            {% if logo_url %}<img src="{{ logo_url }}" alt="" loading="lazy" referrerpolicy="no-referrer">{% endif %}
+            <span>{{ offer.provider_name }}{% if offer.additional_subscription %}<small>Dodatkowy abonament / pakiet</small>{% endif %}</span>
+          </a>{% endif %}
+        {% endfor %}
+        </div>
+        <div class="vod-checked">Źródło: Filmweb · Sprawdzono: {{ result.vod.checked_at }}</div>
+      </div>
+      {% endif %}
       {% if description %}<p class="description">{{ description.description }}</p><div class="source">Opis: <a href="{{ description.url }}" target="_blank" rel="noopener noreferrer">{{ description.source }}</a></div>
       {% else %}<p class="notice">Brak opisu. {{ result.status }}.</p>{% endif %}
       {% if result.notes %}<details><summary>Uwagi dotyczące wyszukiwania</summary><ul>{% for note in result.notes %}<li>{{ note }}</li>{% endfor %}</ul></details>{% endif %}
@@ -71,7 +97,9 @@
     </article></li>
   {% endfor %}
   </ol>
-  <footer>MovieCheck · Oceny i opisy pochodzą ze wskazanych źródeł. Dane z lokalnej pamięci mogą mieć do 7 dni. Brak oceny nie oznacza oceny zero.</footer>
+  <footer>MovieCheck · Oceny i opisy pochodzą ze wskazanych źródeł. Oceny z pamięci mogą mieć do 7 dni, a dostępność VOD do 6 godzin. Brak oceny nie oznacza oceny zero. Oferty dotyczą Polski i mogą się zmieniać.
+    <p>Information courtesy of <a href="https://www.imdb.com/" target="_blank" rel="noopener noreferrer">IMDb</a>. Used with permission. Dane IMDb do użytku osobistego i niekomercyjnego.</p>
+  </footer>
 </main>
 <script nonce="{{ script_nonce }}">
   // Wysokość tekstu wyznacza wysokość okładki, a proporcje źródła jej szerokość.

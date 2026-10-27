@@ -6,6 +6,7 @@ from pathlib import Path
 
 class MovieCache:
     def __init__(self, path: Path, enabled: bool = True):
+        self.path = path
         self.enabled = enabled
         path.parent.mkdir(parents=True, exist_ok=True)
         self.connection = sqlite3.connect(path)

@@ -13,19 +13,27 @@ from moviecheck.service import MovieService
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--screenshot", action="store_true", help="Zapisz podgląd okna Qt bez otwierania okna na pulpicie")
+    parser.add_argument("--input", type=Path, help="Osobna lista lub katalog do sprawdzenia")
+    parser.add_argument("--limit", type=int, help="Maksymalna liczba filmów w próbie")
     arguments = parser.parse_args()
+    if arguments.limit is not None and arguments.limit <= 0:
+        parser.error("Limit musi być dodatni.")
     root = Path(__file__).resolve().parents[1]
     output_directory = root / "build"
     output_directory.mkdir(exist_ok=True)
-    source = root / "examples" / "lista.txt"
+    source = arguments.input.resolve() if arguments.input else root / "examples" / "lista.txt"
     cache = MovieCache(output_directory / "example.sqlite3")
     service = MovieService(cache)
     results = []
     try:
-        for query in load_queries(source):
+        for query in load_queries(source)[:arguments.limit]:
             result = service.lookup(query)
             results.append(result)
-            print(f"{query.title}: {result.status}", flush=True)
+            ratings = ", ".join(f"{entry.source}: {entry.rating or 'brak oceny'}" for entry in result.entries)
+            subscriptions = ", ".join(offer.provider_name for offer in result.vod.offers) or "brak potwierdzonych ofert"
+            print(f"{query.title}: {result.status} | {ratings} | VOD: {subscriptions}", flush=True)
+            for note in result.notes:
+                print(f"  {note}", flush=True)
         report = output_directory / "lista.html"
         write_report(report, source, results)
         print(f"Raport: {report}", flush=True)
@@ -47,6 +55,8 @@ def main():
                 application.setFont(QFont("Segoe UI", 10))
         window = MainWindow()
         window.load_source(source)
+        window.results = window.results[:len(results)]
+        window.table.setRowCount(len(results))
         for index, result in enumerate(results):
             window.receive_result(index, result)
         window.report_path = report

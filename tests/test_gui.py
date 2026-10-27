@@ -10,7 +10,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtWidgets import QApplication
 
 from moviecheck.app import MainWindow
-from moviecheck.models import MovieData
+from moviecheck.models import MovieData, VodAvailability, VodOffer
 
 
 class GuiTests(unittest.TestCase):
@@ -31,10 +31,12 @@ class GuiTests(unittest.TestCase):
             self.assertTrue(window.search_button.isEnabled())
 
             def fake_search(provider, query):
-                return MovieData(query.title, "https://www.filmweb.pl/film/Test-2020-1", provider.source, year=query.year,
-                                 description="Opis testowy.", genres=["Drama"], rating="7")
+                url = "https://www.filmweb.pl/film/Test-2020-1" if provider.source == "Filmweb" else "https://www.imdb.com/title/tt1"
+                return MovieData(query.title, url, provider.source, year=query.year,
+                                 description="Opis testowy.", genres=["Drama"], rating="7" if provider.source == "Filmweb" else "8.1")
 
-            with patch("moviecheck.providers.WebProvider.search", autospec=True, side_effect=fake_search), patch("moviecheck.app.QMessageBox.warning") as warning:
+            vod = VodAvailability([VodOffer("Netflix", "https://www.netflix.com/title/1")], "2026-10-27 12:00")
+            with patch("moviecheck.providers.WebProvider.search", autospec=True, side_effect=fake_search), patch("moviecheck.imdb.IMDbProvider.search", autospec=True, side_effect=fake_search), patch("moviecheck.vod.FilmwebVod.lookup", return_value=vod), patch("moviecheck.app.QMessageBox.warning") as warning:
                 window.start_all()
                 self.assertFalse(window.search_button.isEnabled())
                 deadline = time.monotonic() + 15
@@ -48,7 +50,10 @@ class GuiTests(unittest.TestCase):
                     self.fail("Wątek wyszukiwania nie zakończył się w wymaganym czasie.")
                 warning.assert_not_called()
             self.assertTrue((root / "lista.html").exists())
-            self.assertEqual(window.table.item(0, 5).text(), "Znaleziono")
+            self.assertEqual(window.table.item(0, 3).text(), "7/10")
+            self.assertEqual(window.table.item(0, 4).text(), "8.1/10")
+            self.assertEqual(window.table.item(0, 5).text(), "Netflix")
+            self.assertEqual(window.table.item(0, 7).text(), "Znaleziono")
             self.assertTrue(window.open_button.isEnabled())
             self.assertTrue(window.search_button.isEnabled())
             window.close()

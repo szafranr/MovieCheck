@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 
 from moviecheck.cache import MovieCache
 from moviecheck.inputs import extract_listing_names, load_queries, parse_filename, suggested_report_path
-from moviecheck.models import MovieData, MovieQuery, MovieResult
+from moviecheck.models import MovieData, MovieQuery, MovieResult, VodAvailability
 from moviecheck.providers import ProviderError, WebProvider, image_url, match_score, normalized_title, parse_movie_page, search_title_variants, validate_movie_url
 from moviecheck.report import write_report
 from moviecheck.service import MovieService
@@ -222,15 +222,22 @@ class ServiceTests(unittest.TestCase):
         service = MovieService.__new__(MovieService)
         service.cancelled = lambda: False
         filmweb, imdb = Mock(source="Filmweb"), Mock(source="IMDb")
+        filmweb.search.return_value = None
+        imdb.search.return_value = None
         service.providers = [filmweb, imdb]
+        service.vod = Mock()
+        service.vod.lookup.return_value = VodAvailability()
         return service, filmweb, imdb
 
-    def test_filmweb_description_stops_fallback(self):
+    def test_both_ratings_are_requested_even_with_filmweb_description(self):
         service, filmweb, imdb = self.make_service()
         filmweb.search.return_value = MovieData("Film", "https://www.filmweb.pl/film/Film-2000-1", "Filmweb", description="Opis")
+        imdb.search.return_value = MovieData("Film", "https://www.imdb.com/title/tt1", "IMDb", rating="6.8")
         result = service.lookup(MovieQuery("Film.mkv", "Film"))
         self.assertEqual(result.status, "Znaleziono")
-        imdb.search.assert_not_called()
+        imdb.search.assert_called_once()
+        self.assertEqual(result.entry_for("IMDb").rating, "6.8")
+        self.assertEqual(result.description_entry.source, "Filmweb")
 
     def test_missing_description_keeps_both_sources(self):
         service, filmweb, imdb = self.make_service()
@@ -256,6 +263,24 @@ class ServiceTests(unittest.TestCase):
         service.lookup(MovieQuery("bad.mkv", "Wrong title", 2020), "https://www.filmweb.pl/film/Film-2000-1")
         query = imdb.search.call_args.args[0]
         self.assertEqual((query.title, query.year), ("Correct movie", 2000))
+
+    def test_vod_failure_preserves_both_ratings(self):
+        service, filmweb, imdb = self.make_service()
+        filmweb.search.return_value = MovieData("Film", "https://www.filmweb.pl/film/Film-2000-1", "Filmweb", rating="7.3")
+        imdb.search.return_value = MovieData("Film", "https://www.imdb.com/title/tt1", "IMDb", rating="8.1")
+        service.vod.lookup.side_effect = ProviderError("HTTP 403")
+        result = service.lookup(MovieQuery("Film.mkv", "Film"))
+        self.assertEqual([entry.rating for entry in result.entries], ["7.3", "8.1"])
+        self.assertIn("Filmweb VOD: HTTP 403", result.notes)
+
+    def test_manual_imdb_link_also_checks_filmweb(self):
+        service, filmweb, imdb = self.make_service()
+        imdb.get_movie.return_value = MovieData("Correct movie", "https://www.imdb.com/title/tt1", "IMDb", 2020, rating="8.1")
+        filmweb.search.return_value = MovieData("Poprawny film", "https://www.filmweb.pl/film/Film-2020-1", "Filmweb", 2020, rating="7.3")
+        result = service.lookup(MovieQuery("bad.mkv", "Wrong movie", 2010), "https://www.imdb.com/title/tt1")
+        self.assertEqual(filmweb.search.call_args.args[0].title, "Correct movie")
+        self.assertEqual([entry.source for entry in result.entries], ["Filmweb", "IMDb"])
+        service.vod.lookup.assert_called_once_with(filmweb.search.return_value.url)
 
 
 class ReportAndCacheTests(unittest.TestCase):

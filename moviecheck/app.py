@@ -35,7 +35,9 @@ class SearchWorker(QThread):
         service = None
         try:
             cache = MovieCache(self.cache_path, self.use_cache)
-            service = MovieService(cache, self.isInterruptionRequested)
+            position = 0
+            service = MovieService(cache, self.isInterruptionRequested,
+                                   lambda text: self.progress.emit(position, len(self.jobs), text))
             for position, (index, query, override) in enumerate(self.jobs):
                 if self.isInterruptionRequested():
                     break
@@ -96,7 +98,7 @@ class MainWindow(QMainWindow):
         options = QHBoxLayout()
         self.recursive = QCheckBox("Uwzględnij podkatalogi")
         self.recursive.toggled.connect(self.reload_source)
-        self.use_cache = QCheckBox("Używaj lokalnej pamięci wyników (7 dni)")
+        self.use_cache = QCheckBox("Używaj pamięci wyników (oceny: 7 dni, VOD: 6 godz.)")
         self.use_cache.setChecked(True)
         options.addWidget(self.recursive)
         options.addWidget(self.use_cache)
@@ -135,8 +137,8 @@ class MainWindow(QMainWindow):
         self.progress = QProgressBar()
         self.progress.setValue(0)
         layout.addWidget(self.progress)
-        self.table = QTableWidget(0, 6)
-        self.table.setHorizontalHeaderLabels(["Plik", "Tytuł", "Rok", "Oceny", "Gatunki", "Stan"])
+        self.table = QTableWidget(0, 8)
+        self.table.setHorizontalHeaderLabels(["Plik", "Tytuł", "Rok", "Filmweb", "IMDb", "VOD — abonament", "Gatunki", "Stan"])
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -146,8 +148,10 @@ class MainWindow(QMainWindow):
         self.table.setColumnWidth(0, 260)
         self.table.setColumnWidth(1, 230)
         self.table.setColumnWidth(2, 60)
-        self.table.setColumnWidth(3, 160)
-        self.table.setColumnWidth(4, 170)
+        self.table.setColumnWidth(3, 85)
+        self.table.setColumnWidth(4, 85)
+        self.table.setColumnWidth(5, 180)
+        self.table.setColumnWidth(6, 170)
         self.table.itemSelectionChanged.connect(self.show_details)
         layout.addWidget(self.table, 1)
         self.details = QLabel("Wyniki niejednoznaczne można poprawić, wskazując link do właściwego filmu.")
@@ -266,13 +270,17 @@ class MainWindow(QMainWindow):
     def update_row(self, index: int, result: MovieResult):
         movie = result.primary
         genres = next((entry.genres for entry in result.entries if entry.genres), [])
-        ratings = " | ".join(f"{entry.source}: {entry.rating}/{entry.rating_scale}" if entry.rating else f"{entry.source}: brak" for entry in result.entries)
+        ratings = []
+        for source in ("Filmweb", "IMDb"):
+            entry = result.entry_for(source)
+            ratings.append(f"{entry.rating}/{entry.rating_scale}" if entry and entry.rating else "brak oceny")
+        vod = ", ".join(offer.provider_name + (" (dodatkowy pakiet)" if offer.additional_subscription else "") for offer in result.vod.offers)
         values = [result.query.filename, movie.title if movie else result.query.title,
-                  str((movie.year if movie else None) or result.query.year or ""), ratings,
+                  str((movie.year if movie else None) or result.query.year or ""), *ratings, vod or ("brak ofert" if result.vod.checked_at else "—"),
                   translate_genres(genres), result.status if index in self.completed_indices else "Oczekuje"]
         for column, value in enumerate(values):
             item = QTableWidgetItem(value)
-            item.setToolTip("\n".join(result.notes) if column == 5 else value)
+            item.setToolTip("\n".join(result.notes) if column == 7 else value)
             self.table.setItem(index, column, item)
 
     def show_details(self):

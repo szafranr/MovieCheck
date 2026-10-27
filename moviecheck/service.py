@@ -1,11 +1,14 @@
 from .models import MovieQuery, MovieResult
 from .providers import ProviderError, WebProvider
+from .imdb import IMDbProvider
+from .vod import FilmwebVod
 
 
 class MovieService:
-    def __init__(self, cache, cancelled=lambda: False):
-        self.providers = [WebProvider("Filmweb", cache, cancelled), WebProvider("IMDb", cache, cancelled)]
+    def __init__(self, cache, cancelled=lambda: False, status=lambda message: None):
+        self.providers = [WebProvider("Filmweb", cache, cancelled), IMDbProvider(cache, cancelled, status)]
         self.cancelled = cancelled
+        self.vod = FilmwebVod(cache, self.providers[0].fetch)
 
     def close(self):
         for provider in self.providers:
@@ -22,8 +25,7 @@ class MovieService:
                 result.notes.append("Nieobsługiwany adres. Wskaż stronę filmu Filmweb lub IMDb.")
                 return result
             selected = providers[0]
-            # Po ręcznym wskazaniu Filmweb zachowaj uzupełnianie opisu z IMDb.
-            providers = [selected] + ([self.providers[1]] if selected.source == "Filmweb" else [])
+            providers = [selected] + [provider for provider in self.providers if provider is not selected]
         else:
             providers = self.providers
         lookup_query = query
@@ -34,12 +36,20 @@ class MovieService:
                 movie = provider.get_movie(override) if override and index == 0 else provider.search(lookup_query)
                 if movie:
                     result.entries.append(movie)
-                    if movie.description:
-                        break
-                    # Uzupełniaj dane rozpoznanego filmu, także po ręcznej korekcie linku.
-                    lookup_query = MovieQuery(query.filename, movie.original_title or movie.title, movie.year or query.year)
+                    result.notes.extend(f"{provider.source}: {note}" for note in movie.provider_notes)
+                    # Każdy dostawca jest sprawdzany niezależnie od obecności
+                    # opisu. Zachowaj tożsamość filmu po ręcznej korekcie linku.
+                    if not movie.title.startswith("Film IMDb tt"):
+                        lookup_query = MovieQuery(query.filename, movie.original_title or movie.title, movie.year or query.year)
                 else:
                     result.notes.append(f"{provider.source}: brak pewnego dopasowania tytułu i roku.")
             except (ProviderError, ValueError) as error:
                 result.notes.append(f"{provider.source}: {error}")
+        result.entries.sort(key=lambda movie: movie.source != "Filmweb")
+        filmweb = result.entry_for("Filmweb")
+        if filmweb and not self.cancelled():
+            try:
+                result.vod = self.vod.lookup(filmweb.url)
+            except (ProviderError, ValueError) as error:
+                result.notes.append(f"Filmweb VOD: {error}")
         return result
