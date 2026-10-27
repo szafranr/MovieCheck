@@ -4,10 +4,16 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "moviecheck"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Katalog filmów z raportem HTML — Windows i macOS"
 requires-python = ">=3.11"
 dependencies = ["PySide6>=6.7,<7", "httpx>=0.27,<1", "beautifulsoup4>=4.12,<5", "Jinja2>=3.1.6,<4"]
+
+[project.optional-dependencies]
+build = ["PyInstaller>=6.15,<7", "Pillow>=11,<14"]
+
+[tool.setuptools.dynamic]
+version = {attr = "moviecheck.__version__"}
 
 [project.gui-scripts]
 moviecheck = "moviecheck.app:main"
@@ -16,4 +22,4 @@ moviecheck = "moviecheck.app:main"
 include = ["moviecheck*"]
 
 [tool.setuptools.package-data]
-moviecheck = ["templates/*.html"]
+moviecheck = ["templates/*.html", "assets/*.svg", "assets/*.png"]

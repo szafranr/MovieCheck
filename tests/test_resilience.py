@@ -50,12 +50,13 @@ class BatchResilienceTests(unittest.TestCase):
                         raise exception
                     return successful_result(query)
 
-                with patch("moviecheck.app.MovieCache"), patch("moviecheck.app.MovieService") as service, patch("moviecheck.app.QMessageBox.warning") as warning, self.assertLogs("moviecheck.app", level="ERROR"):
+                with patch("moviecheck.app.MovieCache"), patch("moviecheck.app.MovieService") as service, patch("moviecheck.app.QMessageBox.warning") as warning, patch("moviecheck.app.QMessageBox.information") as information, self.assertLogs("moviecheck.app", level="ERROR"):
                     service.return_value.lookup.side_effect = lookup
                     window.start_all()
                     self.wait_for_window(window)
                     self.assertEqual(service.return_value.lookup.call_count, 10)
                     warning.assert_not_called()
+                    information.assert_called_once()
                 self.assertEqual(window.progress.value(), 10)
                 self.assertFalse(window.report_partial)
                 self.assertTrue(window.open_button.isEnabled())

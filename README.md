@@ -148,36 +148,68 @@ Testy jednostkowe i test przepływu okna Qt działają bez sieci. Test okna uruc
 
 Dokumentacja i komunikaty są po polsku, identyfikatory w kodzie po angielsku. Zależności i punkt wejścia `moviecheck` definiuje `pyproject.toml`.
 
-## Dystrybucja bez instalowania Pythona
+## Budowanie i dystrybucja
 
 PyInstaller może dołączyć interpreter, biblioteki Qt i kod aplikacji do wydania uruchamianego na komputerze bez Pythona. Windows i macOS wymagają osobnych kompilacji, przygotowanych na odpowiednim systemie i dla właściwej architektury. [Opis działania PyInstaller](https://pyinstaller.org/en/stable/operating-mode.html).
 
+Wspólnym punktem wejścia jest `build.py` — runner zadań podobny do Cake, napisany w Pythonie. Wymaga Pythona 3.11 lub nowszego. Sam tworzy oddzielne `.venv-build` i instaluje projekt z dodatkiem `.[build]` (PyInstaller i Pillow), korzystając z `uv`, jeśli jest dostępne, albo z `venv` i `pip`. Nie zmienia środowiska uruchomieniowego `.venv`. Instalacja narzędzi wymaga Internetu; przygotowane środowisko jest używane ponownie, dopóki nie zmieni się konfiguracja lub wersja.
+
+| Zadanie | Działanie |
+|---|---|
+| `setup` | Przygotowanie środowiska budowania |
+| `test` | Testy bez dostępu do sieci, z Qt w trybie offscreen |
+| `icons` | Generowanie PNG, ICO i ICNS z wektorowej ikony |
+| `build` | Testy → ikony → EXE/APP → weryfikacja gotowego programu |
+| `release` | Zadanie `build` oraz plik wydania, manifest JSON i suma SHA-256 |
+| `verify` | Ponowny test już zbudowanego EXE/APP |
+| `version` | Wyświetlenie wersji, bez instalowania narzędzi |
+| `bump` | Podniesienie wyłącznie trzeciego członu wersji, bez budowania |
+
+Domyślne zadanie to `release`, a domyślny system `--target auto` wybiera system komputera. Próba zbudowania macOS na Windows lub odwrotnie kończy się czytelnym błędem przed instalowaniem środowiska.
+
 ### Windows — pojedynczy MovieCheck.exe
 
-W obecnym środowisku projektu dostępne jest `uv`, a `.venv` nie zawiera `pip`. W PowerShell, w katalogu projektu, można przygotować pakiet następująco:
+W PowerShell, w katalogu projektu:
 
 ```powershell
-uv pip install --python .venv\Scripts\python.exe pyinstaller
-.\.venv\Scripts\python.exe -m PyInstaller --noconfirm --onefile --windowed --name MovieCheck --collect-data moviecheck --specpath build run.py
+.\.venv\Scripts\python.exe build.py release --target windows
 ```
 
-Oczekiwany wynik to `dist/MovieCheck.exe`. Ten plik można przekazać użytkownikowi bez katalogu `.venv` i źródeł. `--windowed` wyłącza okno konsoli, a `--collect-data moviecheck` dołącza szablon raportu HTML. Plik `.spec` i wyniki pracy trafiają do ignorowanych katalogów `build/` oraz `dist/`. [Opcje PyInstaller](https://pyinstaller.org/en/stable/usage.html).
+Program powstaje w `dist/windows/MovieCheck.exe`, a plik do przekazania odbiorcy w `dist/releases/`, np. `MovieCheck-0.1.10-windows-x64.exe`. Obok znajdują się manifest `.json` i plik `.sha256`. Numer w nazwie jest pobierany z kodu, a architektura z komputera budującego.
 
-W środowisku przygotowanym standardowym `python -m venv`, z dostępnym `pip`, instalację narzędzia można zamiast `uv` wykonać poleceniem `.\.venv\Scripts\python.exe -m pip install pyinstaller`.
+Pakiet zawiera ikonę, metadane wersji, szablon HTML, interpreter i biblioteki. Nie wymaga `.venv` ani źródeł na komputerze odbiorcy. Specyfikacja PyInstaller i pliki robocze powstają w `build/package/windows/`. Dodatkowe przykłady użycia: `build.py test`, `build.py build`, `build.py verify --target windows`.
 
 Tryb `--onefile` rozpakowuje potrzebne biblioteki do katalogu tymczasowego przy uruchomieniu, więc start może trwać dłużej niż w wydaniu katalogowym. Pojedynczy plik programu nadal tworzy swoją pamięć SQLite i dziennik w systemowym katalogu danych użytkownika; raporty zapisuje w wybranym miejscu. Internet jest potrzebny do wyszukiwania, VOD, obrazów i pobrania zbioru ocen IMDb.
 
 ### macOS — aplikacja MovieCheck.app
 
-Na Macu, po przygotowaniu środowiska opisanego wyżej:
+Na Macu, przy użyciu Pythona 3.11 lub nowszego:
 
 ```sh
-.venv/bin/python -m pip install pyinstaller
-.venv/bin/python -m PyInstaller --noconfirm --onedir --windowed --name MovieCheck --collect-data moviecheck --specpath build run.py
+python3 build.py release --target macos
 ```
 
-Oczekiwany wynik to `dist/MovieCheck.app`. Finder pokazuje go jako jedną aplikację, chociaż technicznie jest to pakiet zawierający katalogi. Do pobrania można udostępnić go w ZIP lub obrazie DMG. PyInstaller odradza łączenie `--onefile` i `--windowed` dla aplikacji macOS; zalecany jest pakiet `.app` budowany w trybie `--onedir`. [Dokumentacja pakietów macOS](https://pyinstaller.org/en/stable/usage.html#building-macos-app-bundles).
+Oczekiwany wynik to `dist/macos/MovieCheck.app` oraz ZIP w `dist/releases/`, np. `MovieCheck-0.1.10-macos-arm64.zip`. Finder pokazuje APP jako jedną aplikację, chociaż technicznie jest to pakiet katalogów. ZIP jest przygotowywany systemowym `ditto`, z zachowaniem struktury i dowiązań pakietu. Wersja trafia do `Info.plist`, a ikona do pakietu ICNS. PyInstaller odradza łączenie `--onefile` i `--windowed` dla macOS; stosowany jest `--onedir`. [Dokumentacja pakietów macOS](https://pyinstaller.org/en/stable/usage.html#building-macos-app-bundles).
 
-Powyższe polecenia stanowią instrukcję przygotowania wydania. Gotowego pliku EXE ani pakietu APP nie zbudowano jeszcze i nie zweryfikowano na czystym systemie. Przed przekazaniem wydania należy sprawdzić uruchomienie, odczyt TXT/katalogów i generowanie raportu z dołączonego szablonu. Podpisane instalatory oraz weryfikacja na rzeczywistym macOS pozostają dalszym etapem. Alternatywą jest `pyside6-deploy`; [dokumentacja Qt for Python](https://doc.qt.io/qtforpython-6/deployment/index.html).
+### Weryfikacja pakietu
+
+Runner zatrzymuje budowanie po błędzie zadania. Po utworzeniu EXE/APP uruchamia gotowy program z `--self-test` w oddzielnym, pustym katalogu i bez ustawień ścieżek Pythona z komputera budującego. Na Windows skrypt ogranicza również ścieżkę wyszukiwania DLL podczas pakowania i testu, aby biblioteki innych programów z `PATH` nie trafiły do wydania. Test jest bez sieci: sprawdza uruchomienie Qt, ikonę, odczyt nazwy bez rozszerzenia, działanie SQLite, dołączony szablon raportu oraz zgodność wersji. Wynik trafia do `build/package/<system>/smoke.json`, a testowy raport obok. Dopiero udana weryfikacja pozwala wykonać `release` i przygotować pliki z sumą kontrolną.
+
+Gałąź macOS wymaga uruchomienia na rzeczywistym Macu; jej konfiguracja ma testy struktury specyfikacji, ale nie zastępuje to testu aplikacji na macOS. Podpisywanie wydania, notaryzacja Apple i instalatory nie są częścią tego runnera.
+
+## Wersja, ikona i zakończenie wyszukiwania
+
+Punktem początkowym jest `0.1.10`. Wersja ma dokładnie trzy człony `0.1.x`; kolejne iteracje zmieniające działanie aplikacji podnoszą tylko `x`, raz przed końcowym commitem. Jedynym źródłem jest `__version__` w `moviecheck/__init__.py`. Z tej wartości korzystają metadane pakietu Python, pasek tytułu, stopka raportu, metadane EXE/APP i nazwy plików wydania.
+
+```powershell
+.\.venv\Scripts\python.exe build.py version
+.\.venv\Scripts\python.exe build.py bump
+```
+
+`bump` zmienia np. `0.1.10` na `0.1.11`, zachowując `0.1`. Samo ponowne budowanie, testy i zmiany wyłącznie dokumentacji nie zwiększają numeru.
+
+Ikona przedstawia jasną klatkę filmową na granatowym tle, z turkusową lupą i znacznikiem sprawdzenia. Źródło wektorowe znajduje się w `moviecheck/assets/moviecheck.svg`, a PNG używane przez okno w `moviecheck/assets/moviecheck.png`. Zadanie `icons` odtwarza PNG oraz generuje ICO dla Windows i ICNS dla macOS w `build/icons/`. [Podgląd ikony](moviecheck/assets/moviecheck.png).
+
+Po zakończeniu wyszukiwania i udanym zapisaniu raportu pojawia się okno informacyjne z liczbą sprawdzonych pozycji, liczbą znalezionych wyników i ścieżką HTML. Raport częściowy ma osobny tytuł komunikatu. Błąd zapisu lub błąd przerywający serię zachowuje komunikat błędu; nie wyświetla się wtedy dodatkowe potwierdzenie pełnego sukcesu.
 
 Instrukcje pracy znajdują się w `AGENTS.md`, a historia współpracy w `docs/INTERACTIONS.md`.

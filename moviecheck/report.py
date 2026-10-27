@@ -7,6 +7,7 @@ from pathlib import Path
 from jinja2 import Environment, PackageLoader, select_autoescape
 
 from .models import MovieResult
+from . import __version__
 from .providers import image_url
 
 GENRE_NAMES = {
@@ -28,7 +29,7 @@ def write_report(path: Path, source: Path, results: list[MovieResult], partial: 
     environment.filters["genres"] = translate_genres
     environment.filters["image_url"] = image_url
     content = environment.get_template("report.html").render(
-        source=source.name, results=results, partial=partial, script_nonce=secrets.token_urlsafe(18),
+        source=source.name, results=results, partial=partial, script_nonce=secrets.token_urlsafe(18), app_version=__version__,
         generated=datetime.now().astimezone().strftime("%Y-%m-%d %H:%M %Z"),
         found=sum(bool(result.entries) for result in results),
     )

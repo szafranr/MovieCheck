@@ -1,5 +1,34 @@
 # Dziennik interakcji i prac
 
+## 2026-10-27 — Runner budowania, ikona, wersja 0.1.10 i potwierdzenie wyszukiwania
+
+### Polecenie użytkownika
+
+> zrób skrypt (coś w rodzaju dotnet cake.cs) do budowania aplikacji na windows i macos.
+> zaproponuj ikone dla aplikacji (może klatka filmowa z lupką)
+> dodaj wersję aplikacji i niech kazda iteracja dotyczaca działania aplikacji podnosi wersję 0.1.x, zacznij z x=10 i tylko 3 element wersji podnoś sam.
+> dodaj msgbox o zakończeniu szukania
+
+### Zmiany i decyzje
+
+- Użyto CodeGraph przed analizą kodu i odczytano zasady projektu oraz dotychczasowy dziennik. Nie delegowano prac innym agentom.
+- Dodano `build.py`: zadania setup, test, icons, build, release, verify, version i bump. Runner tworzy oddzielne `.venv-build`, instaluje zależności przez uv lub pip, uruchamia testy, generuje ikony i specyfikację PyInstaller, buduje aplikację i weryfikuje gotowy pakiet.
+- Windows otrzymuje pojedynczy EXE, macOS pakiet APP i ZIP przygotowywany przez ditto. Wydanie zawiera manifest JSON i sumę SHA-256; nazwa uwzględnia wersję, system i architekturę. Budowanie wymaga właściwego systemu; próba kompilacji krzyżowej jest odrzucana przed zmianami środowiska.
+- Przygotowano własną ikonę SVG: jasna klatka filmu, granatowe tło i turkusowa lupa ze znacznikiem sprawdzenia. Generator tworzy PNG dla Qt, wielorozmiarowe ICO i ICNS dla wydań.
+- Ustawiono początkową wersję `0.1.10` w `moviecheck/__init__.py`. Metadane Python, pasek okna, stopka HTML, EXE/APP i nazwy wydań korzystają z tego źródła. `build.py bump` podnosi wyłącznie trzeci człon. AGENTS.md utrwala zasadę jednej podwyżki na kolejną iterację dotyczącą działania aplikacji; samo budowanie i dokumentacja nie zmieniają numeru.
+- Po zakończeniu wyszukiwania i zapisaniu HTML wyświetlane jest QMessageBox z liczbą sprawdzonych pozycji, wyników i ścieżką raportu. Przerwana seria ma komunikat błędu, anulowanie potwierdza raport częściowy, a nieudany zapis nie wyświetla potwierdzenia sukcesu.
+- Dodano tryb `--self-test`: sprawdza gotowy pakiet bez sieci i pulpitu, Qt, ikonę, wejście bez rozszerzenia, SQLite oraz wygenerowany HTML i wersję. Runner uruchamia go w pustym katalogu bez zależności od ścieżek Pythona projektu.
+- Pierwsza próba EXE ujawniła konflikt ICU: PyInstaller pobierał z PATH bibliotekę Poppler z innym zestawem eksportowanych funkcji niż wymagany przez Qt. Diagnostyczna kompilacja konsolowa pozwoliła odczytać błąd importu QtCore; ograniczono PATH budowania i testu Windows do systemu oraz interpreterów. Dodano test regresji izolacji środowiska.
+- Próba odczytu okna błędu z użyciem umiejętności computer-use nie powiodła się wskutek błędu uruchamiania MXC dotyczącego woluminu G:. Nie wykonywano zastępczej automatyzacji okien; użyto kompilacji diagnostycznej.
+- Nie zmieniano ani nie dodawano do commita plików użytkownika z examples ani indeksu .codegraph. Dokumentacja i dziennik pozostają po polsku, identyfikatory po angielsku.
+
+### Weryfikacja
+
+- 87 testów zakończonych powodzeniem w środowisku budowania: w tym generator wszystkich formatów ikon, specyfikacje obu systemów, metadane wersji, suma kontrolna i manifest, komunikat po zapisie, raport częściowy oraz brak potwierdzenia po błędzie zapisu.
+- Zbudowano i uruchomiono jednoplikowy Windows EXE; test gotowego pakietu zakończył się `ok: true`, `frozen: true`, wersją 0.1.10 oraz potwierdzeniem Qt, ikony, SQLite, wejścia i HTML. Wydanie `dist/releases/MovieCheck-0.1.10-windows-x64.exe` ma manifest i sumę SHA-256. Konflikt ICU został usunięty.
+- Iterację kończy lokalny commit kodu, dokumentacji i dziennika, bez wysyłania do repozytorium zdalnego.
+- Gałąź macOS ma testy struktury specyfikacji, ale wymaga budowania i uruchomienia na rzeczywistym Macu. Podpisywanie, notaryzacja i instalatory nie należą do tego zakresu.
+
 ## 2026-10-27 — Dystrybucja i pojedynczy plik wykonywalny
 
 ### Pytanie użytkownika

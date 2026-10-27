@@ -3,7 +3,7 @@ import logging
 from pathlib import Path
 
 from PySide6.QtCore import QSettings, QStandardPaths, QThread, QUrl, Signal
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtGui import QDesktopServices, QIcon
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QFileDialog, QHBoxLayout, QHeaderView, QInputDialog,
     QLabel, QLineEdit, QMainWindow, QMessageBox, QProgressBar, QPushButton,
@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
 )
 
 from .cache import MovieCache
+from . import __version__
 from .diagnostics import configure_logging
 from .inputs import load_queries, suggested_report_path
 from .models import MovieQuery, MovieResult
@@ -77,7 +78,8 @@ class SearchWorker(QThread):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("MovieCheck — katalog filmów")
+        self.setWindowTitle(f"MovieCheck {__version__} — katalog filmów")
+        self.setWindowIcon(QIcon(str(Path(__file__).with_name("assets") / "moviecheck.png")))
         self.resize(1180, 760)
         self.settings = QSettings("MovieCheck", "MovieCheck")
         self.source = None
@@ -268,6 +270,12 @@ class MainWindow(QMainWindow):
                 message += "\nWyniki pozostały w tabeli; możesz zapisać je ponownie."
             self.status.setText(message)
             QMessageBox.warning(self, "Wyszukiwanie przerwane", message)
+        elif saved:
+            found = sum(bool(result.entries) for result in self.results)
+            heading = "Zapisano raport częściowy" if self.report_partial else "Wyszukiwanie zakończone"
+            message = (f"Sprawdzono: {len(self.completed_indices)} z {len(self.results)} pozycji.\n"
+                       f"Znaleziono dane: {found}.\n\nRaport HTML:\n{self.report_path}")
+            QMessageBox.information(self, heading, message)
         worker.deleteLater()
 
     def save_report(self, output: Path, partial: bool) -> bool:
@@ -389,9 +397,18 @@ class MainWindow(QMainWindow):
 
 
 def main():
+    import argparse
+
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--self-test", type=Path)
+    arguments, _ = parser.parse_known_args()
+    if arguments.self_test:
+        from .self_test import run_self_test
+        sys.exit(run_self_test(arguments.self_test))
     application = QApplication(sys.argv)
     application.setApplicationName("MovieCheck")
     application.setOrganizationName("MovieCheck")
+    application.setApplicationVersion(__version__)
     configure_logging(Path(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppLocalDataLocation)))
     window = MainWindow()
     window.show()
