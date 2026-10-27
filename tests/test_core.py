@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch
 from moviecheck.cache import MovieCache
 from moviecheck.inputs import extract_listing_names, load_queries, parse_filename, suggested_report_path
 from moviecheck.models import MovieData, MovieQuery, MovieResult
-from moviecheck.providers import ProviderError, WebProvider, match_score, parse_movie_page, validate_movie_url
+from moviecheck.providers import ProviderError, WebProvider, match_score, normalized_title, parse_movie_page, search_title_variants, validate_movie_url
 from moviecheck.report import write_report
 from moviecheck.service import MovieService
 
@@ -59,6 +59,86 @@ notes.txt
 
 
 class ProviderTests(unittest.TestCase):
+    def test_apostrophe_spellings_match_the_filename(self):
+        query = parse_filename("Bettys Revenge.2026.1080p.AMZN.WEB-DL.DD2.0.H.264-BobDobbs.mkv")
+        self.assertEqual((query.title, query.year), ("Bettys Revenge", 2026))
+        for title in ("Bettys Revenge", "Betty's Revenge", "Betty’s Revenge", "BETTYʼS REVENGE", "Betty＇s Revenge", "Betty`s Revenge"):
+            with self.subTest(title=title):
+                movie = MovieData(title, "https://www.imdb.com/title/tt38984885", "IMDb", 2026)
+                self.assertEqual(match_score(query, movie), 1.0)
+        self.assertEqual(normalized_title("D’Artagnan"), normalized_title("DArtagnan"))
+        self.assertEqual(normalized_title("Łódź — A-B"), "lodz a b")
+
+    def test_apostrophe_matching_does_not_ignore_year_or_ambiguity(self):
+        query = MovieQuery("Bettys.mkv", "Bettys Revenge", 2026)
+        wrong_year = MovieData("Betty's Revenge", "https://www.imdb.com/title/tt1", "IMDb", 2025)
+        self.assertEqual(match_score(query, wrong_year), 0.0)
+        provider = WebProvider("IMDb", Mock())
+        try:
+            with patch.object(provider, "fetch", return_value='<a href="/title/tt1/">One</a><a href="/title/tt2/">Two</a>'), patch.object(provider, "get_movie", side_effect=[
+                MovieData("Betty's Revenge", "https://www.imdb.com/title/tt1", "IMDb", 2026),
+                MovieData("Bettys Revenge", "https://www.imdb.com/title/tt2", "IMDb", 2026),
+            ]):
+                with self.assertRaisesRegex(ProviderError, "Niejednoznaczne"):
+                    provider.search(query)
+        finally:
+            provider.close()
+
+    def test_search_variants_are_bounded_and_support_missing_apostrophe(self):
+        self.assertEqual(search_title_variants("Bettys Revenge"), ["Bettys Revenge", "Betty's Revenge"])
+        self.assertEqual(search_title_variants("Betty’s Revenge"), ["Betty’s Revenge", "Betty's Revenge", "Bettys Revenge"])
+        self.assertEqual(search_title_variants("Inception"), ["Inception"])
+        self.assertLessEqual(len(search_title_variants("James Jones Dogs Cats Birds")), 4)
+
+    def test_imdb_search_retries_with_possessive_apostrophe(self):
+        provider = WebProvider("IMDb", Mock())
+        movie = MovieData("Betty's Revenge", "https://www.imdb.com/title/tt38984885", "IMDb", 2026, description="Opis testowy.")
+        try:
+            with patch.object(provider, "fetch", side_effect=["<html></html>", '<a href="/title/tt38984885/">Film</a>']) as fetch, patch.object(provider, "get_movie", return_value=movie):
+                result = provider.search(MovieQuery("Bettys.mkv", "Bettys Revenge", 2026))
+                self.assertIs(result, movie)
+                self.assertIn("q=Bettys%20Revenge%202026", fetch.call_args_list[0].args[0])
+                self.assertIn("q=Betty%27s%20Revenge%202026", fetch.call_args_list[1].args[0])
+        finally:
+            provider.close()
+
+    def test_filmweb_search_retries_with_possessive_apostrophe(self):
+        cache = Mock()
+        cache.get.return_value = None
+        provider = WebProvider("Filmweb", cache)
+        movie = MovieData("Betty's Revenge", "https://www.filmweb.pl/film/Betty-2026-1", "Filmweb", 2026, description="Opis testowy.")
+        responses = [json.dumps({"searchHits": []}), json.dumps({"searchHits": [{"id": 1, "type": "film"}]}), json.dumps({"title": {"title": "Betty"}, "year": 2026})]
+        try:
+            with patch.object(provider, "fetch", side_effect=responses) as fetch, patch.object(provider, "get_movie", return_value=movie):
+                self.assertIs(provider.search(MovieQuery("Bettys.mkv", "Bettys Revenge", 2026)), movie)
+                self.assertIn("query=Betty%27s%20Revenge", fetch.call_args_list[1].args[0])
+        finally:
+            provider.close()
+
+    def test_successful_first_search_does_not_request_other_variants(self):
+        provider = WebProvider("IMDb", Mock())
+        movie = MovieData("Betty's Revenge", "https://www.imdb.com/title/tt38984885", "IMDb", 2026)
+        try:
+            with patch.object(provider, "fetch", return_value='<a href="/title/tt38984885/">Film</a>') as fetch, patch.object(provider, "get_movie", return_value=movie):
+                self.assertIs(provider.search(MovieQuery("Bettys.mkv", "Bettys Revenge", 2026)), movie)
+                fetch.assert_called_once()
+        finally:
+            provider.close()
+
+    def test_empty_http_202_is_not_retried_as_another_spelling(self):
+        import httpx
+
+        provider = WebProvider("IMDb", Mock())
+        provider.last_request = -100
+        try:
+            response = httpx.Response(202, text="", request=httpx.Request("GET", "https://www.imdb.com/find/"))
+            with patch.object(provider.client, "get", return_value=response) as get:
+                with self.assertRaisesRegex(ProviderError, "HTTP 202"):
+                    provider.search(MovieQuery("Bettys.mkv", "Bettys Revenge", 2026))
+                get.assert_called_once()
+        finally:
+            provider.close()
+
     def test_filmweb_microdata_without_json_ld(self):
         html = '''<h1 itemprop="name">Incepcja</h1>
         <h2 class="filmCoverSection__originalTitle">Inception <span>2010</span></h2>

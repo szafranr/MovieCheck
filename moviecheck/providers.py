@@ -17,8 +17,23 @@ class ProviderError(Exception):
 
 
 def normalized_title(value: str) -> str:
+    # Nazwy plików często pomijają apostrofy, np. Bettys zamiast Betty's.
+    # Pozostała interpunkcja nadal rozdziela wyrazy.
+    value = value.translate(str.maketrans("", "", "'’‘ʼ＇`"))
     value = unicodedata.normalize("NFKD", value.casefold().replace("ł", "l"))
     return " ".join(re.sub(r"[^\w\s]", " ", "".join(char for char in value if not unicodedata.combining(char))).split())
+
+
+def search_title_variants(title: str) -> list[str]:
+    original = " ".join(title.split())
+    canonical = original.translate(str.maketrans({character: "'" for character in "’‘ʼ＇`"}))
+    variants = list(dict.fromkeys([original, canonical, canonical.replace("'", "")]))
+    if "'" not in canonical:
+        # To wariant pomocniczy, nie zmiana rozpoznanego tytułu. Każdy wynik
+        # nadal przechodzi porównanie z oryginalnym zapytaniem i kontrolę roku.
+        for match in re.finditer(r"\b([^\W\d_]{2,})s\b", canonical, re.I):
+            variants.append(canonical[:match.end() - 1] + "'" + canonical[match.end() - 1:])
+    return list(dict.fromkeys(variant for variant in variants if variant))[:4]
 
 
 def match_score(query: MovieQuery, movie: MovieData) -> float:
@@ -191,12 +206,21 @@ class WebProvider:
         return f"https://www.filmweb.pl/film/{slug}-{year}-{movie_id}"
 
     def search(self, query: MovieQuery) -> MovieData | None:
-        search_title = query.title + (f" {query.year}" if query.year else "")
+        for title in search_title_variants(query.title):
+            if self.cancelled():
+                raise ProviderError("Anulowano.")
+            movie = self.search_variant(query, title)
+            if movie:
+                return movie
+        return None
+
+    def search_variant(self, query: MovieQuery, title: str) -> MovieData | None:
+        search_title = title + (f" {query.year}" if query.year else "")
         if self.source == "Filmweb":
             base = "https://www.filmweb.pl"
             # Publiczne wyszukiwanie używane przez witrynę; HTML wyszukiwarki
             # zawiera rekomendacje zamiast właściwych wyników ładowanych przez JS.
-            url = base + "/api/v1/live/search?query=" + quote(query.title)
+            url = base + "/api/v1/live/search?query=" + quote(title)
             try:
                 hits = json.loads(self.fetch(url)).get("searchHits", [])
             except (ValueError, AttributeError) as error:
@@ -222,7 +246,7 @@ class WebProvider:
                 if candidate not in candidates:
                     candidates.append(candidate)
         if not candidates:
-            raise ProviderError("Brak odczytywalnych wyników wyszukiwania. Strona może wymagać JavaScript. Użyj przycisku „Wskaż link filmu”.")
+            return None
         ranked = []
         failures = []
         for candidate in candidates[:5]:

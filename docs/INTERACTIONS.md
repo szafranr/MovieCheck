@@ -1,5 +1,30 @@
 # Dziennik interakcji i prac
 
+## 2026-10-27 — Tytuły bez apostrofu: Bettys Revenge
+
+### Polecenie użytkownika
+
+> aplikacja nie znalazła np filmu Bettys Revenge, a ja znajduje go w imdb https://www.imdb.com/title/tt38984885/
+> popraw algorytm żeby uwzględniał również skrócony zapis bez apostrofu, bo chyba w tym był problem
+
+### Diagnoza i zmiany
+
+- Przed analizą kodu użyto istniejącego indeksu CodeGraph do odczytu normalizacji tytułów, wyszukiwania, odczytu nazw plików, logiki źródeł i testów.
+- Odczytano zgłoszony wpis z dostarczonych lokalnie plików `tests/180.txt` i `tests/180.html`. Nazwa pliku jest rozpoznawana jako `Bettys Revenge`, rok 2026. Raport zawiera brak dopasowania Filmweb oraz pustą odpowiedź IMDb HTTP 202. To potwierdzona przyczyna braku danych IMDb; samego braku apostrofu nie uznano za dowiedzioną przyczynę.
+- Wyszukiwarka internetowa potwierdziła stronę IMDb filmu „Betty's Revenge (2026)”, identyfikator `tt38984885`; bezpośredni odczyt tej strony narzędziem internetowym zakończył się HTTP 403.
+- W normalizacji apostrofy proste, typograficzne i ich typowe zamienniki są usuwane zamiast zamieniane na spację. Warianty `Bettys Revenge`, `Betty's Revenge` i `Betty’s Revenge` osiągają identyczne dopasowanie. Zachowano rozdzielanie słów inną interpunkcją i normalizację polskich znaków.
+- Dodano maksymalnie cztery unikalne warianty zapytania dla obu dostawców, używane dopiero po braku dopasowania poprzedniego: oryginał, ujednolicony apostrof, brak apostrofu oraz pomocniczy apostrof przed końcowym `s` wyrazu. Tytuł użytkownika nie jest przy tym zmieniany.
+- Zachowano progi podobieństwa, kontrolę roku i odrzucanie niejednoznacznych wyników. Błędy dostępu oraz HTTP 202 nie powodują ponawiania żądań z kolejnymi wariantami.
+- Zaktualizowano polską dokumentację działania algorytmu i jego ograniczeń.
+
+### Weryfikacja i zakończenie iteracji
+
+- Pełny zestaw 27 testów zakończył się sukcesem, w tym 7 nowych testów regresji: zapis z różnymi apostrofami i bez nich, rok i niejednoznaczność, limit wariantów, próby w obu wyszukiwarkach, zakończenie po pierwszym wyniku i brak ponawiania pustej odpowiedzi HTTP 202.
+- Próba na rzeczywistej nazwie pliku potwierdziła współczynnik dopasowania `1.0` do „Betty's Revenge (2026)”. Końcowa próba na żywo wykazała dwa kolejne zapytania Filmweb: `Bettys Revenge`, a następnie `Betty's Revenge`. Drugie znalazło film o tytule „Betty's Revenge”, roku 2026, z opisem i oceną, pod adresem `https://www.filmweb.pl/film/Betty%27s+Revenge-2026-10125167`. Zapisano raport `build/bettys-revenge.html` na podstawie rzeczywistych danych.
+- Osobna próba bezpośredniego pobrania `https://www.imdb.com/title/tt38984885/` nadal zakończyła się pustą odpowiedzią HTTP 202. Błąd IMDb pozostaje ograniczeniem dostępu; w tym przypadku poprawka umożliwia znalezienie danych w Filmweb bez przechodzenia do IMDb.
+- Nie zmieniano ani nie dodawano do commita nieśledzonych `.codegraph/`, `tests/180.txt` i `tests/180.html`.
+- Iterację kończy lokalny commit kodu, testów, README i dziennika, bez wysyłania zmian do zdalnego repozytorium.
+
 ## 2026-10-27 — Nierozpoznane polecenie `py`
 
 ### Zgłoszenie użytkownika

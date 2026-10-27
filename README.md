@@ -86,7 +86,11 @@ IMDb: adapter przeszukuje odnośniki stron filmów i odczytuje ich JSON-LD. Pró
 
 Opis z IMDb może być po angielsku; aplikacja nie tłumaczy fabuły. Znane angielskie gatunki są tłumaczone na polskie nazwy. Gdy Filmweb zawiera opis, IMDb nie jest odpytywane, więc raport nie zawsze zawiera obie oceny. Źródła ocen, gatunków i opisu są oznaczone osobno. Brak danych nie jest zastępowany wymyśloną treścią.
 
-Przy dopasowywaniu sprawdzanych jest do pięciu wyników. Tytuł polski lub oryginalny musi być dostatecznie podobny, a dostępny rok zgodny. Zbliżone wyniki wymagają ręcznego wskazania linku. Program wykonuje żądania kolejno, w odstępach co najmniej 1,1 s w obrębie dostawcy; nie ponawia automatycznie blokad 403/429.
+Przy dopasowywaniu sprawdzanych jest do pięciu wyników dla wariantu zapytania. Apostrofy proste i typograficzne są pomijane w porównaniu: `Bettys Revenge`, `Betty's Revenge` i `Betty’s Revenge` są równoważne. Pozostała interpunkcja nadal rozdziela słowa. Tytuł polski lub oryginalny musi być dostatecznie podobny, a dostępny rok zgodny. Zbliżone wyniki wymagają ręcznego wskazania linku.
+
+Gdy pierwsze zapytanie nie daje dopasowania, wyszukiwarki otrzymują także pomocnicze warianty: z ujednoliconym apostrofem, bez apostrofu lub z apostrofem przed końcowym `s` wyrazu, np. `Bettys` → `Betty's`. Ten ostatni wariant jest heurystyką, a nie automatyczną zmianą tytułu. Sprawdzane są maksymalnie cztery unikalne warianty; pierwszy prawidłowy wynik kończy wyszukiwanie. Kontrola roku i niejednoznaczności pozostaje aktywna. Nie są przy tym dodawane ani usuwane słowa tytułu.
+
+Program wykonuje żądania kolejno, w odstępach co najmniej 1,1 s w obrębie dostawcy. Błąd dostępu, pusta odpowiedź HTTP 202 lub niejednoznaczność przerywają próby danego dostawcy — nie są traktowane jako brakujący apostrof. Zmiana zapisu tytułu nie rozwiązuje blokady pobierania danych IMDb.
 
 Lokalna pamięć wyników znajduje się w systemowym katalogu danych aplikacji MovieCheck. Usunięcie pliku `movies.sqlite3` przy zamkniętej aplikacji czyści pamięć. Nazwy plików są przetwarzane lokalnie, a do serwisów trafiają zapytania z tytułem i ewentualnym rokiem; same pliki wideo nie są wysyłane.
 
