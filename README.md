@@ -40,15 +40,23 @@ py -3 -m venv .venv
 
 Po instalacji aplikację można otwierać także dwuklikiem `start_windows.cmd`. W środowisku, w którym przygotowano projekt, `.venv` jest już utworzone i ma zainstalowane zależności.
 
-macOS, Terminal, w katalogu projektu:
+macOS, Terminal, po `git clone`, w katalogu projektu:
 
 ```sh
-python3 -m venv .venv
-.venv/bin/python -m pip install -e .
+sh start_macos.command
+```
+
+Skrypt wymaga, aby `python3 --version` wskazywał Python 3.11 lub nowszy. Przy pierwszym uruchomieniu tworzy lokalne `.venv`, instaluje aplikację i zależności z `pyproject.toml`, a następnie otwiera okno. Instalacja wymaga Internetu. Przy kolejnych uruchomieniach korzysta z tego samego środowiska; po zmianie wersji lub konfiguracji odświeża instalację. Błąd instalacji zatrzymuje uruchamianie i pozostawia komunikat w Terminalu. Skrypt działa również z katalogu ze spacjami w nazwie.
+
+`.venv` celowo nie znajduje się w Git: zawiera pliki zależne od systemu, architektury i lokalnych ścieżek. `git clone` pobiera kod i deklarację zależności, a skrypt odtwarza środowisko na nowym komputerze. Nie kopiuj `.venv` z Windows na Maca. Jeśli taki katalog już skopiowano, zachowaj go pod inną nazwą przed uruchomieniem skryptu.
+
+Po przygotowaniu środowiska możesz też uruchamiać program bez instalowania:
+
+```sh
 .venv/bin/python -m moviecheck
 ```
 
-Opcjonalnie `chmod +x start_macos.command` pozwala używać przygotowanego pliku startowego. Środowiska `.venv` nie przenosi się między systemami; na każdym komputerze należy utworzyć własne.
+Alternatywnie pierwszą instalację można wykonać ręcznie: `python3 -m venv .venv`, następnie `.venv/bin/python -m pip install -e .`. Plik `start_macos.command` ma w Git uprawnienie wykonywania i zakończenia linii LF; można go otworzyć również dwuklikiem w Finderze.
 
 ## Przygotowanie listy TXT
 

@@ -1,5 +1,26 @@
 # Dziennik interakcji i prac
 
+## 2026-10-27 — Uruchamianie macOS po git clone, wersja 0.1.12
+
+### Zgłoszenie użytkownika
+
+> katalogu .venv nie ma w repozytorium przez co nie mogę uruchomić aplikacji na macos, gdzie zrobiłem git clone
+
+### Diagnoza i zmiany
+
+- Sprawdzono instrukcje, README i dziennik, użyto CodeGraph przed analizą kodu. Potwierdzono, że dotychczasowy start_macos.command tylko wymagał istniejącego .venv, a plik w Git nie miał uprawnienia wykonywania.
+- Wyjaśniono, że .venv jest lokalnym środowiskiem zależnym od systemu, architektury i ścieżek. Pozostaje poza repozytorium; po klonowaniu odtwarza się je z pyproject.toml.
+- Usprawniono start_macos.command: sprawdza Python 3.11+, tworzy brakujące .venv, instaluje projekt i zależności, a następnie uruchamia aplikację. Kolejne uruchomienia używają istniejącej instalacji; zmiana wersji, pyproject.toml albo brak zależności powoduje ponowne przygotowanie.
+- Nieudana instalacja zatrzymuje uruchomienie bez zapisywania znacznika sukcesu. Istniejące środowisko z Windows nie jest usuwane: skrypt prosi o zmianę jego nazwy. Argumenty i ścieżki ze spacjami są zachowywane.
+- Dodano .gitattributes wymuszający LF dla plików .command i uprawnienie wykonywania start_macos.command w Git. README opisuje jedno polecenie `sh start_macos.command` oraz ręczne odtworzenie środowiska.
+- Ze względu na zmianę sposobu uruchamiania zwiększono wersję raz poleceniem build.py bump: 0.1.11 → 0.1.12. Nie budowano nowego EXE: ta zmiana dotyczy startu ze źródeł na macOS.
+
+### Weryfikacja
+
+- Sprawdzono składnię shell przez bash -n. Testy wykonują rzeczywisty skrypt w powłoce Git Bash na Windows, w katalogach ze spacjami, z kontrolowanym zastępczym interpreterem: pierwsza instalacja, brak ponownej instalacji, odświeżenie po zmianie konfiguracji, przerwanie i ponowienie po błędzie, odrzucenie starego Pythona oraz zachowanie obcego środowiska. Nie zastępuje to uruchomienia Qt na Macu.
+- Nie uruchamiano aplikacji na macOS ani nie instalowano zależności na zdalnym Macu. Instrukcja ręczna działa z dotychczasowym kodem; nowy skrypt wymaga przeniesienia aktualnego commita do repozytorium pobieranego na Macu.
+- Iterację kończy lokalny commit kodu, dokumentacji i dziennika. Pliki examples i indeks .codegraph pozostają poza commitem.
+
 ## 2026-10-27 — Naprawa inicjalizacji SSL w EXE, wersja 0.1.11
 
 ### Zgłoszenie użytkownika
