@@ -121,6 +121,9 @@ Lokalna pamięć wyników i indeks ocen IMDb znajdują się w pliku `movies.sqli
 
 ## Testy i diagnostyka
 
+Log błędów na Windows znajduje się w `%LOCALAPPDATA%\MovieCheck\MovieCheck\errors.log`. W Eksploratorze można wkleić `%LOCALAPPDATA%\MovieCheck\MovieCheck` do paska adresu. Do zgłoszenia błędu dołącz `errors.log`, a jeśli istnieją, również `errors.log.1` i `errors.log.2` (rotacja: maksymalnie 2 MB na plik). Podaj wersję programu, tytuł filmu i przybliżoną godzinę błędu. Przed udostępnieniem sprawdź log pod kątem prywatnych ścieżek i nazw plików.
+
+
 Windows:
 
 ```powershell

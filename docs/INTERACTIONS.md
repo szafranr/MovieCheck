@@ -1,5 +1,17 @@
 # Dziennik interakcji i prac
 
+## 2026-10-27 — Lokalizacja logów do zgłoszeń błędów
+
+### Pytanie użytkownika
+
+> gdzie znajdę logi aplikacji, by móc tu przekazać błędy
+
+### Ustalenia i weryfikacja
+
+- Sprawdzono przez CodeGraph `configure_logging`: plik `errors.log`, rotacja 2 MB i dwie kopie `errors.log.1` oraz `errors.log.2`.
+- Uruchomiono QStandardPaths z nazwą i organizacją MovieCheck: Windows zwraca `C:/Users/szafr/AppData/Local/MovieCheck/MovieCheck`. Przekazano dokładną lokalizację i skrót `%LOCALAPPDATA%` do Eksploratora.
+- Uzupełniono README o lokalizację i dane pomocne przy zgłoszeniu. Nie zmieniano działania aplikacji ani wersji 0.1.10; testy aplikacji nie wymagają powtarzania. Iterację kończy lokalny commit dokumentacji i dziennika.
+
 ## 2026-10-27 — Runner budowania, ikona, wersja 0.1.10 i potwierdzenie wyszukiwania
 
 ### Polecenie użytkownika
