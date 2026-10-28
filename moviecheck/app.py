@@ -7,8 +7,8 @@ from queue import Queue, Empty
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from PySide6.QtCore import QSettings, QStandardPaths, QThread, QUrl, Signal, Qt
-from PySide6.QtGui import QDesktopServices, QIcon, QColor
+from PySide6.QtCore import QSettings, QThread, QUrl, Signal, Qt
+from PySide6.QtGui import QDesktopServices, QIcon, QColor, QAction
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QFileDialog, QHBoxLayout, QHeaderView, QInputDialog,
     QLabel, QLineEdit, QMainWindow, QMessageBox, QProgressBar, QPushButton,
@@ -24,6 +24,7 @@ from .providers import validate_movie_url
 from .report import translate_genres, write_report
 from .service import MovieService
 from .performance import BatchState
+from .about import AboutDialog, data_directory
 
 logger = logging.getLogger(__name__)
 
@@ -155,7 +156,17 @@ class MainWindow(QMainWindow):
         layout.setSpacing(12)
         heading = QLabel("MovieCheck")
         heading.setStyleSheet("font-size: 28px; font-weight: 700;")
-        layout.addWidget(heading)
+        heading_row = QHBoxLayout()
+        heading_row.addWidget(heading)
+        heading_row.addStretch()
+        self.about_button = QPushButton("O programie…")
+        self.about_button.clicked.connect(self.show_about)
+        heading_row.addWidget(self.about_button)
+        layout.addLayout(heading_row)
+        about_action = QAction("O programie…", self)
+        about_action.setMenuRole(QAction.MenuRole.AboutRole)
+        about_action.triggered.connect(self.show_about)
+        self.menuBar().addMenu("Pomoc").addAction(about_action)
         caption = QLabel("Wybierz filmy. Pobierz informacje. Zapisz katalog HTML.")
         layout.addWidget(caption)
 
@@ -266,6 +277,9 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(container)
         self.set_busy(False)
 
+    def show_about(self):
+        AboutDialog(self).exec()
+
     def choose_directory(self):
         selected = QFileDialog.getExistingDirectory(self, "Wybierz katalog z filmami", self.settings.value("last_directory", ""))
         if selected:
@@ -322,7 +336,7 @@ class MainWindow(QMainWindow):
         self.search_done = False
         self.completed_indices.difference_update(index for index, _, _ in jobs)
         self.table.setSortingEnabled(False)
-        cache_directory = Path(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppLocalDataLocation))
+        cache_directory = data_directory()
         self.worker = SearchWorker(jobs, cache_directory / "movies.sqlite3", self.use_cache.isChecked(), self, workers=self.parallelism.value(), tmdb_credential=self.tmdb_token.text().strip())
         self.worker.result_ready.connect(self.receive_result)
         self.worker.progress.connect(self.update_progress)
@@ -534,7 +548,7 @@ def main():
     application.setApplicationName("MovieCheck")
     application.setOrganizationName("MovieCheck")
     application.setApplicationVersion(__version__)
-    configure_logging(Path(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppLocalDataLocation)))
+    configure_logging(data_directory())
     window = MainWindow()
     window.show()
     sys.exit(application.exec())

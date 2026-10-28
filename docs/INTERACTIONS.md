@@ -1,5 +1,30 @@
 # Dziennik interakcji i prac
 
+## 2026-10-28 — O programie, lokalizacje danych i diagnostyka awarii macOS, wersja 0.1.15
+
+### Polecenie i pytania użytkownika
+
+> na macos miałem crash aplikacji, gdzie znajdę logi?
+> dodaj sekcję o programie, gdzie będzie nazwa aplikacji, wersja, data publikacji i autor: Robert Szafrański. dodaj tam też informację o miejscu logów i miejscu bazy danych.
+> czy jak wyszukuje bez podania klucza API, to po prostu TMDB zostanie pominiete? czy będzie błąd
+
+### Ustalenia i zmiany
+
+- Przeczytano zasady, dokumentację i dziennik, użyto CodeGraph przed analizą okna, logowania i TMDB. Sprawdzono oficjalną dokumentację QStandardPaths, źródło Qt dodające nazwę organizacji i aplikacji na macOS oraz instrukcję Konsoli Apple.
+- Dla normalnego uruchomienia MovieCheck log macOS znajduje się w `~/Library/Application Support/MovieCheck/MovieCheck/errors.log`, baza w tym samym katalogu jako movies.sqlite3, a rotacje logu to errors.log.1 i errors.log.2. Przy nagłym zakończeniu procesu nie wszystkie awarie trafiają do logu Python; należy także sprawdzić systemowe raporty Konsoli, typowo w `~/Library/Logs/DiagnosticReports/`, z nazwą MovieCheck lub Python dla uruchomienia źródeł. Nie otrzymano jeszcze raportu z awarii, więc nie ustalono jej przyczyny ani nie deklarowano jej naprawienia.
+- Dodano moviecheck/about.py: okno „O programie” z nazwą, wersją, datą publikacji i autorem Robert Szafrański, aktualnymi pełnymi ścieżkami logu i bazy oraz systemowym katalogiem awarii na macOS. Pola ścieżek są tylko do odczytu, można skopiować komplet informacji lub otworzyć odpowiednie foldery.
+- Okno otwiera przycisk u góry i akcja menu Pomoc z natywną rolą About na macOS. Wspólny helper data_directory jest używany przez okno, uruchomienie logowania i wyszukiwanie, aby nie rozjechały się pokazywane i używane lokalizacje. Nie zmieniono miejsca istniejącej bazy i logów ani ich formatu.
+- Zwiększono wersję raz przez build.py bump: 0.1.14 → 0.1.15. Dodano stałe metadane __release_date__ = 2026-10-28 i __author__. Data jest przypisana wersji, nie zmienia się podczas ponownej kompilacji i nie jest pobierana z GitHub Releases. AGENTS.md utrwala aktualizację daty według kontekstu użytkownika przy nowej wersji.
+- Potwierdzono zachowanie TMDB bez klucza: nie ma żądań API; wewnętrzny ProviderError jest obsługiwany przez MovieService jako uwaga przy filmie. Filmweb i IMDb dalej zwracają dane, kolumna TMDB pozostaje bez oceny, bez błędu całej serii i śladu wyjątku w logu. Nie zmieniano tej logiki, dodano regresję dla całej usługi.
+- Uzupełniono README o okno, metadane, ścieżki na obu systemach, kopiowanie danych diagnostycznych i różnicę między logiem aplikacji a systemowym raportem awarii.
+
+### Weryfikacja
+
+- 110 testów przeszło w pełnym zadaniu release. Nowe przypadki obejmują dane About, kopiowanie, lokalizacje z QStandardPaths, otwieranie folderu, ścieżkę raportów macOS, podpięcie przycisku i usługę wyszukiwania bez klucza TMDB (zero zapytań API, wyniki z dwóch pozostałych źródeł).
+- Obejrzano zrzut okna About w Qt offscreen (build/about-0.1.15.png). Zbudowano Windows EXE `dist/releases/MovieCheck-0.1.15-windows-x64.exe` z JSON i SHA-256; gotowy pakiet przeszedł test z otwarciem obiektu About i kontrolą ścieżki bazy, a także Qt, TLS, współbieżnego cache i HTML. Wynik w build/package/windows/smoke.json, przebieg w build/release-0.1.15.log.
+- Na Macu nie uruchamiano aplikacji ani nie odtwarzano zgłoszonej awarii. Do jej diagnozy potrzebny jest odpowiedni errors.log i/lub raport systemowy z godziny zdarzenia. Iterację kończy lokalny commit; pliki examples i indeks .codegraph pozostają poza commitem. Nie wysyłano commitów ani nie publikowano wydań.
+- Źródła: https://doc.qt.io/qt-6/qstandardpaths.html, https://github.com/qt/qtbase/blob/6.10/src/corelib/io/qstandardpaths_mac.mm, https://support.apple.com/guide/console/reports-cnsl664be99a/mac.
+
 ## 2026-10-28 — Równoległość, TMDB, sortowanie i dwa kroki raportowania, wersja 0.1.14
 
 ### Polecenie użytkownika

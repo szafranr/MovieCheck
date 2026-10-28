@@ -159,7 +159,7 @@ Lokalna pamięć wyników i indeks ocen IMDb znajdują się w pliku `movies.sqli
 
 Integracja korzysta z oficjalnego API TMDB. W ustawieniach API swojego konta TMDB uzyskaj API Read Access Token (Bearer) albo klucz v3 i wpisz go w polu aplikacji. Możesz również ustawić zmienną środowiskową `TMDB_READ_ACCESS_TOKEN` lub `TMDB_API_KEY` przed uruchomieniem. Pole jest maskowane; wartość nie jest zapisywana w QSettings, pamięci wyników, HTML ani pomiarach. Nie przesyłaj klucza w zgłoszeniu błędu.
 
-Bez klucza pozostałe źródła działają; TMDB pokazuje brak oceny i uwagę o konfiguracji. Nie wpisujemy do kodu wspólnego klucza dystrybucyjnego. Ocena TMDB pochodzi z `vote_average` i jest pokazywana tylko przy co najmniej jednym głosie. Dopasowanie wykorzystuje identyfikator IMDb, jeśli go znamy, a w pozostałych przypadkach tytuł, warianty apostrofów i rok. Niejednoznaczne wyniki wymagają ręcznego linku. Polski opis ma pierwszeństwo przed angielskim opisem TMDB; opis Filmweb ma pierwszeństwo w całej aplikacji.
+Bez klucza pozostałe źródła działają; TMDB nie wysyła zapytań API, pokazuje brak oceny i uwagę o konfiguracji przy wyniku. Jest to obsługiwana sytuacja, bez przerywania wyszukiwania, okna błędu całej serii czy śladu wyjątku w errors.log. Nieprawidłowy podany klucz także daje uwagę przy wyniku TMDB, a pozostałe źródła są nadal przetwarzane. Nie wpisujemy do kodu wspólnego klucza dystrybucyjnego. Ocena TMDB pochodzi z `vote_average` i jest pokazywana tylko przy co najmniej jednym głosie. Dopasowanie wykorzystuje identyfikator IMDb, jeśli go znamy, a w pozostałych przypadkach tytuł, warianty apostrofów i rok. Niejednoznaczne wyniki wymagają ręcznego linku. Polski opis ma pierwszeństwo przed angielskim opisem TMDB; opis Filmweb ma pierwszeństwo w całej aplikacji.
 
 [Uwierzytelnianie TMDB](https://developer.themoviedb.org/docs/authentication-application), [wyszukiwanie](https://developer.themoviedb.org/reference/search-movie), [obrazy](https://developer.themoviedb.org/docs/image-basics). Logo pobrano bez modyfikacji z [oficjalnego zasobu TMDB](https://www.themoviedb.org/assets/2/v4/logos/v2/blue_square_2-d537fb228cf3ded904ef09b136fe3fec72548ebc1fea3fbbd1ad9e36364db38b.svg); jest umieszczone w sekcji źródeł i autorów oraz w stopce HTML wraz z wymaganym oznaczeniem. [Zasady oznaczania TMDB](https://developer.themoviedb.org/docs/faq).
 
@@ -179,6 +179,28 @@ Pomiar własnej listy (wykonuje rzeczywiste żądania, zapisuje osobną bazę SQ
 ```
 
 Na Windows zastąp `.venv/bin/python` przez `.\.venv\Scripts\python.exe`. Przy porównywaniu zimnej pamięci użyj nowych nazw plików wyjściowych. Diagnostyczny skrypt nie generuje HTML.
+
+## O programie i lokalizacje danych
+
+Przycisk „O programie…” u góry okna oraz pozycja w menu Pomoc otwierają informacje o aplikacji: MovieCheck, aktualną wersję, datę publikacji wersji i autora — Robert Szafrański. Na macOS standardowa akcja About może zostać przeniesiona przez Qt do menu aplikacji.
+
+W oknie podane są rzeczywiste pełne ścieżki logu i bazy SQLite. Korzystają z tej samej funkcji QStandardPaths co wyszukiwanie i konfiguracja logowania. Można je zaznaczać, skopiować razem przyciskiem „Kopiuj informacje” lub otworzyć folder logów i bazy. Na macOS dostępny jest osobny przycisk systemowych raportów awarii.
+
+Typowe lokalizacje dla aplikacji uruchomionej jako MovieCheck:
+
+| Plik | Windows | macOS |
+|---|---|---|
+| Log | `%LOCALAPPDATA%\MovieCheck\MovieCheck\errors.log` | `~/Library/Application Support/MovieCheck/MovieCheck/errors.log` |
+| Baza danych | `%LOCALAPPDATA%\MovieCheck\MovieCheck\movies.sqlite3` | `~/Library/Application Support/MovieCheck/MovieCheck/movies.sqlite3` |
+| Systemowe raporty awarii | — | `~/Library/Logs/DiagnosticReports/` |
+
+Logi rotacyjne to `errors.log.1` i `errors.log.2` w tym samym katalogu. Baza zawiera pamięć wyników i indeks ocen IMDb; podczas działania SQLite może tworzyć obok pliki `movies.sqlite3-wal` i `movies.sqlite3-shm`. Nie przenoś ani nie usuwaj tych plików podczas pracy programu.
+
+Na Macu otwórz Finder, naciśnij Cmd+Shift+G i wklej ścieżkę katalogu. Nagłe zamknięcie procesu, np. awaria biblioteki natywnej, nie musi zostawić wpisu w errors.log. Wtedy otwórz aplikację Konsola → Raporty awarii i odszukaj zdarzenie o właściwej godzinie, nazwane MovieCheck albo Python/python3.12, jeśli uruchamiasz źródła. Systemowe raporty mają m.in. rozszerzenie `.ips`; starsze systemy mogą używać `.crash`. Przekaż errors.log, ewentualne logi rotacyjne i odpowiedni raport awarii, z wersją aplikacji i godziną zdarzenia. Samo miejsce logu nie wyjaśnia przyczyny awarii.
+
+[Ścieżki Qt](https://doc.qt.io/qt-6/qstandardpaths.html), [Qt — dodawanie organizacji i nazwy aplikacji na macOS](https://github.com/qt/qtbase/blob/6.10/src/corelib/io/qstandardpaths_mac.mm), [Apple — raporty awarii w Konsoli](https://support.apple.com/guide/console/reports-cnsl664be99a/mac). Okno pokazuje ścieżki aktualnego środowiska, które mogą się różnić przy zmianie konfiguracji systemu.
+
+Data publikacji jest stałą metadanych wersji `__release_date__` w `moviecheck/__init__.py`, a autor pochodzi z `__author__`. Dla 0.1.15 data wynosi 28.10.2026. Ponowne budowanie nie zmienia daty. To data przypisana wersji, a nie odczyt daty publikacji z GitHub Releases.
 
 ## Testy i diagnostyka
 

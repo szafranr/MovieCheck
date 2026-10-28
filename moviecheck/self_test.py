@@ -17,6 +17,7 @@ def run_self_test(output: Path) -> int:
     try:
         from PySide6.QtWidgets import QApplication
         from .app import MainWindow
+        from .about import AboutDialog, application_paths
         from .cache import MovieCache
         from .inputs import load_queries
         from .models import MovieData, MovieResult
@@ -31,6 +32,11 @@ def run_self_test(output: Path) -> int:
         window = MainWindow()
         if window.windowIcon().isNull():
             raise RuntimeError("W pakiecie brakuje ikony aplikacji.")
+        about = AboutDialog(window)
+        paths = application_paths()
+        if __version__ not in about.information or str(paths["database"]) not in about.information:
+            raise RuntimeError("Nieprawidłowe informacje o programie w pakiecie.")
+        about.close()
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             source = root / "lista.txt"
@@ -64,7 +70,7 @@ def run_self_test(output: Path) -> int:
             html = report.read_text(encoding="utf-8")
             if "Opis testowy." not in html or f"MovieCheck {__version__}" not in html:
                 raise RuntimeError("Nieprawidłowy szablon raportu w pakiecie.")
-        result.update(ok=True, icon=True, qt=True, sqlite=True, tls=True, parallel_cache=True, report=str(report), input=True)
+        result.update(ok=True, icon=True, qt=True, sqlite=True, tls=True, parallel_cache=True, about=True, report=str(report), input=True)
     except Exception as error:
         result["error"] = f"{type(error).__name__}: {error}"
     finally:
