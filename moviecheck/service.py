@@ -1,9 +1,11 @@
 import logging
+import time
 
 from .models import MovieQuery, MovieResult
 from .providers import ProviderError, WebProvider
 from .imdb import IMDbProvider
 from .vod import FilmwebVod
+from .tmdb import TMDBProvider
 
 logger = logging.getLogger(__name__)
 
@@ -11,6 +13,8 @@ logger = logging.getLogger(__name__)
 class MovieService:
     def __init__(self, cache, cancelled=lambda: False, status=lambda message: None):
         self.providers = [WebProvider("Filmweb", cache, cancelled), IMDbProvider(cache, cancelled, status)]
+        self.providers.append(TMDBProvider(cache, vars(cache).get("tmdb_credential", ""), cancelled))
+        self.batch_state = vars(cache).get("batch_state")
         self.cancelled = cancelled
         self.vod = FilmwebVod(cache, self.providers[0].fetch)
 
@@ -24,7 +28,7 @@ class MovieService:
             from urllib.parse import urlsplit
 
             hostname = urlsplit(override).hostname
-            providers = [provider for provider in self.providers if hostname in ({"filmweb.pl", "www.filmweb.pl"} if provider.source == "Filmweb" else {"imdb.com", "www.imdb.com"})]
+            providers = [provider for provider in self.providers if hostname in {"Filmweb": {"filmweb.pl", "www.filmweb.pl"}, "IMDb": {"imdb.com", "www.imdb.com"}, "TMDB": {"themoviedb.org", "www.themoviedb.org"}}.get(provider.source, set())]
             if not providers:
                 result.notes.append("Nieobsługiwany adres. Wskaż stronę filmu Filmweb lub IMDb.")
                 return result
@@ -36,7 +40,11 @@ class MovieService:
         for index, provider in enumerate(providers):
             if self.cancelled():
                 break
+            started = time.perf_counter()
             try:
+                if provider.source == "TMDB":
+                    imdb = result.entry_for("IMDb")
+                    provider.imdb_id = imdb.url.rsplit("/", 1)[-1] if imdb else ""
                 movie = provider.get_movie(override) if override and index == 0 else provider.search(lookup_query)
                 if movie:
                     result.entries.append(movie)
@@ -53,9 +61,14 @@ class MovieService:
                     logger.exception("Błąd źródła %s dla pliku %s", provider.source, query.filename)
                 detail = str(error) if expected else f"{type(error).__name__}: {error}"
                 result.notes.append(f"{provider.source}: {detail}")
+            finally:
+                state = getattr(self, "batch_state", None)
+                if state:
+                    state.record(provider.source + " wyszukiwanie", time.perf_counter() - started)
         result.entries.sort(key=lambda movie: movie.source != "Filmweb")
         filmweb = result.entry_for("Filmweb")
         if filmweb and not self.cancelled():
+            started = time.perf_counter()
             try:
                 result.vod = self.vod.lookup(filmweb.url)
             except Exception as error:
@@ -64,4 +77,8 @@ class MovieService:
                     logger.exception("Błąd VOD dla pliku %s", query.filename)
                 detail = str(error) if expected else f"{type(error).__name__}: {error}"
                 result.notes.append(f"Filmweb VOD: {detail}")
+            finally:
+                state = getattr(self, "batch_state", None)
+                if state:
+                    state.record("Filmweb VOD", time.perf_counter() - started)
         return result

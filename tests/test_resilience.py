@@ -10,6 +10,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from bs4 import BeautifulSoup
 from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import Qt
 
 from moviecheck.app import MainWindow, SearchWorker
 from moviecheck.diagnostics import configure_logging
@@ -59,6 +60,9 @@ class BatchResilienceTests(unittest.TestCase):
                     information.assert_called_once()
                 self.assertEqual(window.progress.value(), 10)
                 self.assertFalse(window.report_partial)
+                self.assertFalse(window.open_button.isEnabled())
+                self.assertFalse((root / "lista.html").exists())
+                window.export_report()
                 self.assertTrue(window.open_button.isEnabled())
                 self.assertIn(type(exception).__name__, window.results[8].notes[0])
                 self.assertEqual(window.results[9].status, "Znaleziono")
@@ -72,7 +76,7 @@ class BatchResilienceTests(unittest.TestCase):
                 window.deleteLater()
                 self.application.processEvents()
 
-    def test_fatal_error_saves_partial_report_before_showing_dialog(self):
+    def test_fatal_error_keeps_results_until_explicit_partial_export(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             listing = root / "lista.txt"
@@ -83,13 +87,14 @@ class BatchResilienceTests(unittest.TestCase):
             report = root / "lista.html"
 
             def show_warning(*arguments):
-                self.assertTrue(report.exists())
+                self.assertFalse(report.exists())
 
             with patch("moviecheck.app.MovieCache", side_effect=OSError(22, "Invalid argument")), patch("moviecheck.app.QMessageBox.warning", side_effect=show_warning) as warning, self.assertLogs("moviecheck.app", level="ERROR"):
                 window.start_all()
                 self.wait_for_window(window)
                 warning.assert_called_once()
             self.assertTrue(window.report_partial)
+            window.export_report()
             html = report.read_text(encoding="utf-8")
             self.assertIn("Raport częściowy", html)
             self.assertIn("Opis dla Movie00", html)
@@ -101,9 +106,9 @@ class BatchResilienceTests(unittest.TestCase):
 
     def test_cleanup_failure_does_not_skip_closing_other_resources(self):
         query = MovieQuery("Film.mkv", "Film")
-        worker = SearchWorker([(0, query, "")], Path("unused.sqlite3"), True)
+        worker = SearchWorker([(0, query, "")], Path("unused.sqlite3"), True, workers=1)
         received = []
-        worker.result_ready.connect(lambda index, result: received.append(result))
+        worker.result_ready.connect(lambda index, result: received.append(result), Qt.ConnectionType.DirectConnection)
         with patch("moviecheck.app.MovieCache") as cache, patch("moviecheck.app.MovieService") as service, self.assertLogs("moviecheck.app", level="ERROR"):
             service.return_value.lookup.return_value = successful_result(query)
             service.return_value.close.side_effect = OSError(22, "Invalid argument")

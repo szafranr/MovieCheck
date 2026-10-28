@@ -50,11 +50,17 @@ class MovieResult:
 
     @property
     def primary(self) -> MovieData | None:
-        return self.entries[0] if self.entries else None
+        return self.description_entry or (self.entries[0] if self.entries else None)
 
     @property
     def description_entry(self) -> MovieData | None:
-        return next((entry for entry in self.entries if entry.description), None)
+        return next((entry for source in ("Filmweb", "IMDb", "TMDB")
+                     for entry in self.entries if entry.source == source and entry.description), None)
+
+    @property
+    def poster_entry(self) -> MovieData | None:
+        return next((entry for source in ("TMDB", "Filmweb", "IMDb")
+                     for entry in self.entries if entry.source == source and entry.poster_url), None)
 
     @property
     def status(self) -> str:

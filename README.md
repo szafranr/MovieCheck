@@ -8,10 +8,10 @@ Okienkowa aplikacja w Pythonie i PySide6 (Qt) do tworzenia katalogu filmów na p
 - Odczyt prostych list nazw, typowego `ls -l` i tabelarycznego wyniku PowerShell `ls`.
 - Obsługa UTF-8, UTF-16 z BOM i awaryjnie Windows-1250.
 - Rozpoznawanie tytułu i roku; usuwanie typowych oznaczeń jakości, kodeków i wydania.
-- Niezależne wyszukiwanie w Filmweb i IMDb, z osobną oceną każdego serwisu. Opis z Filmweb ma pierwszeństwo.
+- Niezależne wyszukiwanie w Filmweb, IMDb i TMDB, z osobną oceną każdego serwisu. Opis z Filmweb ma pierwszeństwo.
 - Dostępność VOD w Polsce: tylko abonamenty, z logotypami platform i linkami do ofert; bez wypożyczeń i zakupu.
 - Podgląd wyników, poprawianie tytułu i roku oraz ręczne wskazanie linku do filmu.
-- Pobieranie w osobnym wątku, postęp i anulowanie z raportem częściowym.
+- Równoległe wyszukiwanie tytułów (domyślnie 6 zadań, regulacja 1–16), postęp i anulowanie. Osobny krok generowania raportu z bieżącej kolejności tabeli.
 - Lokalna pamięć SQLite: dane filmów i ocen do 7 dni, dostępność VOD do 6 godzin; bufor wyników można wyłączyć.
 - Raport HTML z klikalną okładką po lewej, tytułem będącym linkiem, ocenami, gatunkami, krótkim opisem i źródłami po prawej. Tekst działa po zapisaniu bez Internetu; okładki są ładowane z adresów źródłowych i wymagają połączenia z siecią.
 
@@ -110,19 +110,20 @@ Katalogi zawierające kolejne katalogi filmowe są traktowane jako kolekcje; ich
 ## Obsługa
 
 1. Wybierz katalog albo TXT. Opcję podkatalogów ustaw przed wyszukiwaniem.
-2. Sprawdź tytuły i lata w tabeli. Przyciskiem „Popraw tytuł / rok…” skorygujesz zaznaczony wiersz.
-3. W razie potrzeby zmień miejsce zapisu raportu.
-4. Kliknij „Wyszukaj wszystkie filmy”. Raport zapisuje się automatycznie po zakończeniu.
-5. Gdy dopasowanie jest niejednoznaczne lub błędne, zaznacz wiersz i wybierz „Wskaż link filmu…”. Aplikacja pobierze dane wskazanego filmu i odświeży raport.
-6. „Otwórz raport” otwiera HTML w domyślnej przeglądarce. „Zapisz raport” pozwala zapisać obecne wyniki ponownie, np. w innym miejscu po błędzie zapisu.
+2. Sprawdź rozpoznane tytuły i lata. W razie potrzeby użyj „Popraw tytuł / rok…”. Wpisz token lub klucz API TMDB w polu nad tabelą, jeśli chcesz pobierać trzecie oceny i okładki TMDB.
+3. Wybierz liczbę równoległych zadań (domyślnie 6) i kliknij „1. Wyszukaj dane”. Program zbiera dane; nie zapisuje ani nie nadpisuje HTML na tym etapie.
+4. Po komunikacie o zakończeniu kliknij nagłówek tytułu, roku lub jednej z trzech ocen, aby posortować tabelę. Kolejne kliknięcie zmienia kierunek; oceny są sortowane liczbowo, a brak oceny to odrębna wartość poniżej zera.
+5. Kliknięcie podkreślonego tytułu otwiera stronę filmu: Filmweb, jeśli ma opis, w przeciwnym razie IMDb z opisem lub TMDB z opisem; przy braku opisów pozostaje pierwsza dostępna strona. Ręczny link Filmweb/IMDb/TMDB może poprawić dopasowanie także po sortowaniu.
+6. Wybierz miejsce HTML i kliknij „2. Wygeneruj raport”. Zapisana lista odpowiada dokładnie bieżącej kolejności wierszy. Nadpisanie istniejącego pliku wymaga potwierdzenia dopiero na tym etapie.
+7. „Otwórz raport” otwiera zapisany HTML w przeglądarce. Po kolejnych zmianach danych lub sortowania wygeneruj go ponownie.
 
 Domyślne nazwy: `lista.txt` → `lista.html` obok listy; katalog `Filmy` → `Filmy.html` obok katalogu. Istniejący raport wymaga potwierdzenia zastąpienia. Pliki filmów i lista wejściowa nie są modyfikowane.
 
-Okładka w raporcie jest linkiem do strony filmu u dostawcy obrazu. Aplikacja odczytuje adres z metadanych Filmweb lub IMDb, a pliku obrazu nie zapisuje lokalnie ani nie osadza w HTML. Plakat znajduje się po lewej stronie pozycji, na wysokość jej treści, z szerokością wynikającą z proporcji źródłowego obrazu. Na wąskich ekranach jego szerokość jest ograniczana, aby tekst pozostał czytelny; obraz zachowuje proporcje i nie jest przycinany. Mały skrypt w raporcie aktualizuje rozmiar po załadowaniu obrazu, zmianie szerokości okna i rozwinięciu uwag. Brak adresu lub błąd ładowania obrazu pozostawia sam tekst.
+Okładka w raporcie jest linkiem do strony filmu u dostawcy obrazu. Aplikacja wybiera przede wszystkim okładkę TMDB w rozmiarze w500, a przy jej braku Filmweb lub IMDb; a pliku obrazu nie zapisuje lokalnie ani nie osadza w HTML. Plakat znajduje się po lewej stronie pozycji, na wysokość jej treści, z szerokością wynikającą z proporcji źródłowego obrazu. Na wąskich ekranach jego szerokość jest ograniczana, aby tekst pozostał czytelny; obraz zachowuje proporcje i nie jest przycinany. Mały skrypt w raporcie aktualizuje rozmiar po załadowaniu obrazu, zmianie szerokości okna i rozwinięciu uwag. Brak adresu lub błąd ładowania obrazu pozostawia sam tekst.
 
 Starsze wpisy lokalnej pamięci, które nie zawierają jeszcze pola okładki, są uzupełniane podczas kolejnego wyszukiwania. Jeśli serwis jest wtedy niedostępny, zachowywane są dotychczasowe opisy i oceny.
 
-W tabeli i raporcie zawsze są dwie osobne pozycje ocen: Filmweb i IMDb. Brak oceny jednego źródła nie powoduje zastąpienia jej oceną drugiego. Błąd VOD nie usuwa pobranych ocen ani opisów.
+W tabeli i raporcie zawsze są trzy osobne pozycje ocen: Filmweb, IMDb i TMDB. Brak oceny jednego źródła nie powoduje zastąpienia jej oceną drugiego. Błąd VOD nie usuwa pobranych ocen ani opisów.
 
 Sekcja „Dostępny w abonamencie · Polska” pojawia się tylko po potwierdzeniu ofert abonamentowych Filmweb. Logotyp i nazwa platformy są linkiem do oferty filmu. Uwzględniane są aktywne oferty z płatnością oznaczoną jako subskrypcja; gdy Filmweb nie podaje ceny pojedynczego filmu, wymagane są jawne dane abonamentu platformy. Jawne wypożyczenie, zakup lub darmowa oferta bez subskrypcji nie są uznawane za abonament. Oferty nieaktywne, wygasłe i zaplanowane na przyszłość są pomijane. Abonamenty kanałów w innych platformach, np. SkyShowtime w Prime Video lub HBO w Canal+, są oznaczone „Dodatkowy abonament / pakiet”; nie oznaczają dostępu w podstawowym planie Prime lub Canal+.
 
@@ -132,7 +133,7 @@ Anulowanie czeka na zakończenie bieżącego żądania lub odebranie fragmentu o
 
 Błąd jednego źródła nie blokuje pozostałych źródeł tego filmu. Nieoczekiwany błąd przetwarzania pojedynczego filmu zostaje zapisany w jego uwagach, a wyszukiwanie przechodzi do następnego pliku. Po sprawdzeniu całej listy raport zawiera zarówno znalezione dane, jak i pozycje wymagające sprawdzenia. Błąd filmu nie powoduje oznaczenia całego raportu jako częściowego, jeśli sprawdzono wszystkie pozycje.
 
-Jeśli błąd uniemożliwi pracę całej serii, np. nie uda się otworzyć pamięci danych, aplikacja zapisuje raport częściowy z dotychczasowymi wynikami przed pokazaniem komunikatu o przerwaniu. Gdy sam zapis HTML jest niemożliwy, wyniki pozostają w tabeli i można wybrać inne miejsce oraz użyć „Zapisz raport”.
+Jeśli błąd uniemożliwi pracę całej serii, np. nie uda się otworzyć pamięci danych, aplikacja pozostawia dotychczasowe wyniki i uwagi w tabeli oraz pokazuje komunikat o przerwaniu. Raport częściowy generuje użytkownik w drugim kroku. Gdy zapis HTML jest niemożliwy, wyniki pozostają w tabeli i można wybrać inne miejsce oraz ponowić „2. Wygeneruj raport”.
 
 Nieoczekiwane błędy są zapisywane z nazwą pliku, źródłem i śladem wywołań w `errors.log`, obok `movies.sqlite3`. Na Windows jest to zwykle `%LOCALAPPDATA%\MovieCheck\MovieCheck\errors.log`. Dziennik ma limit 2 MB i dwie kopie rotacyjne. Brak dostępu do pliku diagnostycznego nie blokuje wyszukiwania. Daty VOD są porównywane bez konwersji przez systemowe znaczniki czasu, dzięki czemu wartości takie jak `9999-12-31` nie wywołują błędu Windows `OSError: [Errno 22] Invalid argument`.
 
@@ -142,17 +143,42 @@ Filmweb: wyszukiwanie korzysta z publicznego endpointu używanego przez stronę 
 
 IMDb: adapter korzysta z publicznych podpowiedzi tytułów IMDb do rozpoznania identyfikatora i roku. Ocenę pobiera ze strony filmu, jeśli jest ona dostępna, a przy odmowie dostępu z oficjalnego zbioru `title.ratings.tsv.gz`, identyfikując film po jego numerze IMDb. Dzięki temu odpowiedź HTTP 202 lub 403 strony nie blokuje odczytu niezależnej oceny. Zbiór nie zawiera opisów fabuły, więc uzupełnienie opisu IMDb nadal zależy od dostępności strony. Adapter nie omija blokad, CAPTCHA ani logowania. Źródło oceny jest opisane po wskazaniu jej w raporcie kursorem. [Dokumentacja danych IMDb](https://data.imdb.com/non-commercial-datasets/).
 
-Opis z IMDb może być po angielsku; aplikacja nie tłumaczy fabuły. Znane angielskie gatunki są tłumaczone na polskie nazwy. IMDb jest odpytywane również wtedy, gdy Filmweb zawiera już opis i ocenę. Ręczne wskazanie linku w dowolnym z tych serwisów zachowuje próbę znalezienia drugiego źródła. Źródła ocen, gatunków i opisu są oznaczone osobno. Brak danych nie jest zastępowany wymyśloną treścią.
+Opis z IMDb może być po angielsku; aplikacja nie tłumaczy fabuły. Znane angielskie gatunki są tłumaczone na polskie nazwy. IMDb jest odpytywane również wtedy, gdy Filmweb zawiera już opis i ocenę. Ręczne wskazanie linku w dowolnym serwisie zachowuje próbę znalezienia pozostałych źródeł. Źródła ocen, gatunków i opisu są oznaczone osobno. Brak danych nie jest zastępowany wymyśloną treścią.
 
 Przy dopasowywaniu sprawdzanych jest do pięciu wyników dla wariantu zapytania. Apostrofy proste i typograficzne są pomijane w porównaniu: `Bettys Revenge`, `Betty's Revenge` i `Betty’s Revenge` są równoważne. Pozostała interpunkcja nadal rozdziela słowa. Tytuł polski lub oryginalny musi być dostatecznie podobny, a dostępny rok zgodny. Zbliżone wyniki wymagają ręcznego wskazania linku.
 
 Gdy pierwsze zapytanie nie daje dopasowania, wyszukiwarki otrzymują także pomocnicze warianty: z ujednoliconym apostrofem, bez apostrofu lub z apostrofem przed końcowym `s` wyrazu, np. `Bettys` → `Betty's`. Ten ostatni wariant jest heurystyką, a nie automatyczną zmianą tytułu. Sprawdzane są maksymalnie cztery unikalne warianty; pierwszy prawidłowy wynik kończy wyszukiwanie. Kontrola roku i niejednoznaczności pozostaje aktywna. Nie są przy tym dodawane ani usuwane słowa tytułu.
 
-Program wykonuje żądania kolejno, w odstępach co najmniej 1,1 s w obrębie dostawcy. Błędy dostępu i pusta odpowiedź HTTP 202 nie są ponawiane jako warianty zapisu tytułu; w przypadku IMDb ocenę można nadal odczytać z oficjalnego zbioru danych. Niejednoznaczny wynik wymaga ręcznego dopasowania. Zmiana zapisu tytułu nie rozwiązuje blokady odczytu opisu ze strony IMDb.
+Program przetwarza tytuły równolegle. Każdy pracownik zachowuje odstęp co najmniej 1,1 s między żądaniami danego adaptera Filmweb/IMDb; dodatkowo wspólny limit dopuszcza rozpoczęcie żądania na dany host najwyżej co 0,2 s. Błędy dostępu i pusta odpowiedź HTTP 202 nie są ponawiane jako warianty zapisu tytułu; w przypadku IMDb ocenę można nadal odczytać z oficjalnego zbioru danych. Niejednoznaczny wynik wymaga ręcznego dopasowania. Zmiana zapisu tytułu nie rozwiązuje blokady odczytu opisu ze strony IMDb.
 
 W podpowiedziach IMDb wynik z potwierdzonym rokiem ma pierwszeństwo przed tytułem bez roku. Skrócona nazwa wyświetlana przez IMDb, np. „Glass Onion” zamiast „Glass Onion: A Knives Out Mystery”, jest dopuszczana wyłącznie przy identycznym tytule głównym przed dwukropkiem i znanym, zgodnym roku. Tytuł główny musi mieć co najmniej 8 znaków po normalizacji; nie jest stosowane dowolne usuwanie słów. Kilka równie dobrych wyników nadal wymaga wskazania właściwego linku.
 
 Lokalna pamięć wyników i indeks ocen IMDb znajdują się w pliku `movies.sqlite3` w systemowym katalogu danych aplikacji MovieCheck. Usunięcie tego pliku przy zamkniętej aplikacji czyści pamięć oraz indeks, który zostanie ponownie pobrany, gdy będzie potrzebny. Wyłączenie bufora omija zapisane rekordy filmów i VOD oraz odświeża zbiór ocen IMDb raz na serię wyszukiwania, jeśli jest on potrzebny. Nazwy plików są przetwarzane lokalnie, a do serwisów trafiają zapytania z tytułem i ewentualnym rokiem; same pliki wideo nie są wysyłane.
+
+## TMDB: ocena, opis i okładka
+
+Integracja korzysta z oficjalnego API TMDB. W ustawieniach API swojego konta TMDB uzyskaj API Read Access Token (Bearer) albo klucz v3 i wpisz go w polu aplikacji. Możesz również ustawić zmienną środowiskową `TMDB_READ_ACCESS_TOKEN` lub `TMDB_API_KEY` przed uruchomieniem. Pole jest maskowane; wartość nie jest zapisywana w QSettings, pamięci wyników, HTML ani pomiarach. Nie przesyłaj klucza w zgłoszeniu błędu.
+
+Bez klucza pozostałe źródła działają; TMDB pokazuje brak oceny i uwagę o konfiguracji. Nie wpisujemy do kodu wspólnego klucza dystrybucyjnego. Ocena TMDB pochodzi z `vote_average` i jest pokazywana tylko przy co najmniej jednym głosie. Dopasowanie wykorzystuje identyfikator IMDb, jeśli go znamy, a w pozostałych przypadkach tytuł, warianty apostrofów i rok. Niejednoznaczne wyniki wymagają ręcznego linku. Polski opis ma pierwszeństwo przed angielskim opisem TMDB; opis Filmweb ma pierwszeństwo w całej aplikacji.
+
+[Uwierzytelnianie TMDB](https://developer.themoviedb.org/docs/authentication-application), [wyszukiwanie](https://developer.themoviedb.org/reference/search-movie), [obrazy](https://developer.themoviedb.org/docs/image-basics). Logo pobrano bez modyfikacji z [oficjalnego zasobu TMDB](https://www.themoviedb.org/assets/2/v4/logos/v2/blue_square_2-d537fb228cf3ded904ef09b136fe3fec72548ebc1fea3fbbd1ad9e36364db38b.svg); jest umieszczone w sekcji źródeł i autorów oraz w stopce HTML wraz z wymaganym oznaczeniem. [Zasady oznaczania TMDB](https://developer.themoviedb.org/docs/faq).
+
+## Wydajność i równoległość
+
+Pomiar z 2026-10-28 dla Inception (2010), Interstellar (2014) i The Matrix (1999): dotychczasowe wyszukiwanie sekwencyjne 53,205 s, nowa próba równoległa 23,305 s, około 2,28× szybciej. Najwięcej czasu zajmował Filmweb: 41,929 s; pierwszy zbiór IMDb wymagał 7,646 s na pobranie i import. Są to dwie próby z rzeczywistymi serwisami i osobnymi pamięciami wyników, bez klucza TMDB; wahania sieci i liczba tytułów wpływają na wynik. [Pełny opis pomiaru](docs/PERFORMANCE.md).
+
+Każdy pracownik ma własnych klientów HTTP i połączenie SQLite; WAL oraz limit oczekiwania 30 s pozwalają współdzielić lokalną pamięć bez przekazywania połączeń między wątkami. Indeks IMDb jest przygotowywany raz na serię, także przy wyłączonym buforze wyników. Błąd pobrania bazy jest pamiętany do końca serii. Anulowanie zatrzymuje podejmowanie kolejnych tytułów i czeka na trwające żądania.
+
+Po każdej serii errors.log zawiera czas całkowity, liczbę pracowników i sumy czasu etapów pod nazwą `moviecheck.performance`. Etapy zachodzą na siebie, więc ich suma może przekraczać czas całkowity. Osobno mierzone są limity żądań, odpowiedzi HTTP, wyszukiwanie źródeł, VOD oraz pobranie i indeksowanie IMDb.
+
+Pomiar własnej listy (wykonuje rzeczywiste żądania, zapisuje osobną bazę SQLite obok JSON):
+
+```sh
+.venv/bin/python -m scripts.profile_search --input lista.txt --limit 10 --workers 1 --output build/profile-serial.json
+.venv/bin/python -m scripts.profile_search --input lista.txt --limit 10 --workers 6 --output build/profile-parallel.json
+```
+
+Na Windows zastąp `.venv/bin/python` przez `.\.venv\Scripts\python.exe`. Przy porównywaniu zimnej pamięci użyj nowych nazw plików wyjściowych. Diagnostyczny skrypt nie generuje HTML.
 
 ## Testy i diagnostyka
 
@@ -179,6 +205,8 @@ Testy jednostkowe i test przepływu okna Qt działają bez sieci. Test okna uruc
 - `moviecheck/providers.py` — adaptery Filmweb/IMDb oraz dopasowanie filmów.
 - `moviecheck/service.py` — kolejność źródeł i uzupełnianie braków.
 - `moviecheck/imdb.py` — rozpoznawanie tytułów IMDb i oficjalna baza ocen.
+- `moviecheck/tmdb.py` — oficjalne API TMDB, oceny i plakaty.
+- `moviecheck/performance.py` — wspólny stan serii, limity i pomiary.
 - `moviecheck/vod.py` — weryfikacja abonamentów Filmweb dla Polski.
 - `moviecheck/cache.py` — pamięć SQLite.
 - `moviecheck/report.py`, `moviecheck/templates/report.html` — raport HTML.
@@ -231,7 +259,7 @@ Oczekiwany wynik to `dist/macos/MovieCheck.app` oraz ZIP w `dist/releases/`, np.
 
 ### Weryfikacja pakietu
 
-Runner zatrzymuje budowanie po błędzie zadania. Po utworzeniu EXE/APP uruchamia gotowy program z `--self-test` w oddzielnym, pustym katalogu i bez ustawień ścieżek Pythona z komputera budującego. Na Windows skrypt ogranicza również ścieżkę wyszukiwania DLL podczas pakowania i testu, aby biblioteki innych programów z `PATH` nie trafiły do wydania. Test jest bez sieci: sprawdza uruchomienie Qt, ikonę, odczyt nazwy bez rozszerzenia, działanie SQLite, inicjalizację obu klientów HTTPS z weryfikacją TLS, dołączony szablon raportu oraz zgodność wersji. Jeśli dystrybucja Pythona zawiera dodatkowy plik CA `codex-rejected-cas.pem` wymagany przez jej moduł SSL, runner dołącza go do pakietu. Wynik trafia do `build/package/<system>/smoke.json`, a testowy raport obok. Dopiero udana weryfikacja pozwala wykonać `release` i przygotować pliki z sumą kontrolną.
+Runner zatrzymuje budowanie po błędzie zadania. Po utworzeniu EXE/APP uruchamia gotowy program z `--self-test` w oddzielnym, pustym katalogu i bez ustawień ścieżek Pythona z komputera budującego. Na Windows skrypt ogranicza również ścieżkę wyszukiwania DLL podczas pakowania i testu, aby biblioteki innych programów z `PATH` nie trafiły do wydania. Test jest bez sieci: sprawdza uruchomienie Qt, ikonę, odczyt nazwy bez rozszerzenia, działanie SQLite, inicjalizację trzech klientów HTTPS z weryfikacją TLS oraz współbieżną obsługę SQLite, dołączony szablon raportu oraz zgodność wersji. Jeśli dystrybucja Pythona zawiera dodatkowy plik CA `codex-rejected-cas.pem` wymagany przez jej moduł SSL, runner dołącza go do pakietu. Wynik trafia do `build/package/<system>/smoke.json`, a testowy raport obok. Dopiero udana weryfikacja pozwala wykonać `release` i przygotować pliki z sumą kontrolną.
 
 Gałąź macOS wymaga uruchomienia na rzeczywistym Macu; jej konfiguracja ma testy struktury specyfikacji, ale nie zastępuje to testu aplikacji na macOS. Podpisywanie wydania, notaryzacja Apple i instalatory nie są częścią tego runnera.
 
@@ -266,6 +294,6 @@ Punktem początkowym jest `0.1.10`. Wersja ma dokładnie trzy człony `0.1.x`; k
 
 Ikona przedstawia jasną klatkę filmową na granatowym tle, z turkusową lupą i znacznikiem sprawdzenia. Źródło wektorowe znajduje się w `moviecheck/assets/moviecheck.svg`, a PNG używane przez okno w `moviecheck/assets/moviecheck.png`. Zadanie `icons` odtwarza PNG oraz generuje ICO dla Windows i ICNS dla macOS w `build/icons/`. [Podgląd ikony](moviecheck/assets/moviecheck.png).
 
-Po zakończeniu wyszukiwania i udanym zapisaniu raportu pojawia się okno informacyjne z liczbą sprawdzonych pozycji, liczbą znalezionych wyników i ścieżką HTML. Raport częściowy ma osobny tytuł komunikatu. Błąd zapisu lub błąd przerywający serię zachowuje komunikat błędu; nie wyświetla się wtedy dodatkowe potwierdzenie pełnego sukcesu.
+Po zakończeniu wyszukiwania pojawia się komunikat z liczbą sprawdzonych pozycji i wyników oraz instrukcją sortowania i wygenerowania HTML w drugim kroku. Anulowanie ma osobny komunikat częściowy. Błąd serii lub zapisu ma komunikat błędu. HTML powstaje wyłącznie po wybraniu „2. Wygeneruj raport”.
 
 Instrukcje pracy znajdują się w `AGENTS.md`, a historia współpracy w `docs/INTERACTIONS.md`.

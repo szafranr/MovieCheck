@@ -46,11 +46,12 @@ def match_score(query: MovieQuery, movie: MovieData) -> float:
 
 def validate_movie_url(url: str, source: str) -> str:
     parts = urlsplit(url)
-    hosts = {"Filmweb": {"filmweb.pl", "www.filmweb.pl"}, "IMDb": {"imdb.com", "www.imdb.com"}}
-    pattern = r"/film/[^/]+-\d+" if source == "Filmweb" else r"/title/tt\d+"
+    hosts = {"Filmweb": {"filmweb.pl", "www.filmweb.pl"}, "IMDb": {"imdb.com", "www.imdb.com"}, "TMDB": {"themoviedb.org", "www.themoviedb.org"}}
+    pattern = {"Filmweb": r"/film/[^/]+-\d+", "IMDb": r"/title/tt\d+", "TMDB": r"/movie/\d+(?:-[^/]+)?"}.get(source, r"(?!)")
     if parts.scheme != "https" or parts.hostname not in hosts.get(source, set()) or parts.port not in (None, 443) or parts.username or parts.password or not re.fullmatch(pattern + r"/?", parts.path):
-        raise ProviderError("Podaj pełny adres HTTPS strony filmu z Filmweb lub IMDb.")
-    return f"https://www.{('filmweb.pl' if source == 'Filmweb' else 'imdb.com')}{parts.path.rstrip('/')}"
+        raise ProviderError("Podaj pełny adres HTTPS strony filmu z Filmweb, IMDb lub TMDB.")
+    host = {"Filmweb": "filmweb.pl", "IMDb": "imdb.com", "TMDB": "themoviedb.org"}[source]
+    return f"https://www.{host}{parts.path.rstrip('/')}"
 
 
 def movie_objects(value):
@@ -169,6 +170,7 @@ class WebProvider:
         self.cache = cache
         self.cancelled = cancelled
         self.last_request = 0.0
+        self.batch_state = vars(cache).get("batch_state")
         self.client = httpx.Client(timeout=httpx.Timeout(20.0, connect=10.0), follow_redirects=False,
                                    headers={"User-Agent": "MovieCheck/0.1 (+local desktop movie catalog)", "Accept-Language": "pl,en;q=0.8"})
 
@@ -176,16 +178,34 @@ class WebProvider:
         self.client.close()
 
     def fetch(self, url: str) -> str:
+        if self.batch_state:
+            with self.batch_state.measure(self.source + " HTTP i oczekiwanie"):
+                return self._fetch(url)
+        return self._fetch(url)
+
+    def _fetch(self, url: str) -> str:
         for _ in range(4):
+            wait_started = time.perf_counter()
             while time.monotonic() - self.last_request < 1.1:
                 if self.cancelled():
                     raise ProviderError("Anulowano.")
                 time.sleep(0.05)
             if self.cancelled():
                 raise ProviderError("Anulowano.")
+            if self.batch_state:
+                self.batch_state.wait_for_request(urlsplit(url).hostname, self.cancelled)
+                if self.cancelled():
+                    raise ProviderError("Anulowano.")
             self.last_request = time.monotonic()
+            if self.batch_state:
+                self.batch_state.record(self.source + " limitowanie żądań", time.perf_counter() - wait_started)
             try:
-                response = self.client.get(url)
+                request_started = time.perf_counter()
+                try:
+                    response = self.client.get(url)
+                finally:
+                    if self.batch_state:
+                        self.batch_state.record(self.source + " odpowiedzi HTTP", time.perf_counter() - request_started)
                 if response.status_code in (301, 302, 303, 307, 308):
                     redirected = urljoin(url, response.headers.get("location", ""))
                     domain = "filmweb.pl" if self.source == "Filmweb" else "imdb.com"

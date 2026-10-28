@@ -1,13 +1,18 @@
 import sys
 import logging
+import os
+import time
+import threading
+from queue import Queue, Empty
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from PySide6.QtCore import QSettings, QStandardPaths, QThread, QUrl, Signal
-from PySide6.QtGui import QDesktopServices, QIcon
+from PySide6.QtCore import QSettings, QStandardPaths, QThread, QUrl, Signal, Qt
+from PySide6.QtGui import QDesktopServices, QIcon, QColor
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QFileDialog, QHBoxLayout, QHeaderView, QInputDialog,
     QLabel, QLineEdit, QMainWindow, QMessageBox, QProgressBar, QPushButton,
-    QTableWidget, QTableWidgetItem, QAbstractItemView, QVBoxLayout, QWidget,
+    QTableWidget, QTableWidgetItem, QAbstractItemView, QVBoxLayout, QWidget, QSpinBox,
 )
 
 from .cache import MovieCache
@@ -18,6 +23,7 @@ from .models import MovieQuery, MovieResult
 from .providers import validate_movie_url
 from .report import translate_genres, write_report
 from .service import MovieService
+from .performance import BatchState
 
 logger = logging.getLogger(__name__)
 
@@ -27,52 +33,104 @@ class SearchWorker(QThread):
     progress = Signal(int, int, str)
     failed = Signal(str)
 
-    def __init__(self, jobs, cache_path: Path, use_cache: bool, parent=None):
+    def __init__(self, jobs, cache_path: Path, use_cache: bool, parent=None, *, workers=6, tmdb_credential=""):
         super().__init__(parent)
         self.jobs = jobs
         self.cache_path = cache_path
         self.use_cache = use_cache
+        self.workers = max(1, min(16, workers))
+        self.tmdb_credential = tmdb_credential
         self.partial = True
         self.error = ""
+        self.state = BatchState()
+        self.elapsed = 0.0
 
     def run(self):
-        cache = None
-        service = None
+        started = time.perf_counter()
+        queue = Queue()
+        for job in self.jobs:
+            queue.put(job)
+        completed = 0
+        lock = threading.Lock()
+        initialization_lock = threading.Lock()
+        stop = threading.Event()
+
+        def cancelled():
+            return self.isInterruptionRequested() or stop.is_set()
+
+        def status(text):
+            with lock:
+                self.progress.emit(completed, len(self.jobs), text)
+
+        def work():
+            nonlocal completed
+            cache = service = None
+            try:
+                with initialization_lock:
+                    cache = MovieCache(self.cache_path, self.use_cache)
+                cache.batch_state = self.state
+                cache.tmdb_credential = self.tmdb_credential
+                service = MovieService(cache, cancelled, status)
+                while not cancelled():
+                    try:
+                        index, query, override = queue.get_nowait()
+                    except Empty:
+                        break
+                    try:
+                        result = service.lookup(query, override)
+                    except Exception as error:
+                        logger.exception("Błąd przetwarzania pliku %s", query.filename)
+                        result = MovieResult(query, notes=[f"Błąd przetwarzania filmu: {type(error).__name__}: {error}"])
+                    if cancelled():
+                        break
+                    with lock:
+                        completed += 1
+                        self.result_ready.emit(index, result)
+                        self.progress.emit(completed, len(self.jobs), query.title)
+            finally:
+                for resource in (service, cache):
+                    if resource is not None:
+                        try:
+                            resource.close()
+                        except Exception as error:
+                            logger.exception("Błąd zamykania zasobów wyszukiwania")
+                            with lock:
+                                self.error = self.error or f"{type(error).__name__}: {error}"
+
+        def guarded_work():
+            try:
+                work()
+            except Exception as error:
+                logger.exception("Przerwanie serii wyszukiwania")
+                with lock:
+                    self.error = self.error or f"{type(error).__name__}: {error}"
+                stop.set()
+
         try:
-            cache = MovieCache(self.cache_path, self.use_cache)
-            position = 0
-            service = MovieService(cache, self.isInterruptionRequested,
-                                   lambda text: self.progress.emit(position, len(self.jobs), text))
-            for position, (index, query, override) in enumerate(self.jobs):
-                if self.isInterruptionRequested():
-                    break
-                self.progress.emit(position, len(self.jobs), query.title)
-                try:
-                    result = service.lookup(query, override)
-                except Exception as error:
-                    logger.exception("Błąd przetwarzania pliku %s", query.filename)
-                    result = MovieResult(query, notes=[f"Błąd przetwarzania filmu: {type(error).__name__}: {error}"])
-                if self.isInterruptionRequested():
-                    break
-                self.result_ready.emit(index, result)
-                self.progress.emit(position + 1, len(self.jobs), query.title)
-            self.partial = self.isInterruptionRequested()
+            with ThreadPoolExecutor(max_workers=self.workers, thread_name_prefix="moviecheck") as executor:
+                futures = [executor.submit(guarded_work) for _ in range(min(self.workers, len(self.jobs)))]
+                for future in futures:
+                    future.result()
         except Exception as error:
-            logger.exception("Przerwanie serii wyszukiwania")
+            logger.exception("Błąd puli wyszukiwania")
             self.error = f"{type(error).__name__}: {error}"
+        self.partial = cancelled() or bool(self.error) or completed < len(self.jobs)
+        self.elapsed = time.perf_counter() - started
+        self.state.log(self.elapsed, self.workers)
+        if self.error:
             self.failed.emit(self.error)
-        finally:
-            for resource in (service, cache):
-                if resource is None:
-                    continue
-                try:
-                    resource.close()
-                except Exception as error:
-                    logger.exception("Błąd zamykania zasobów wyszukiwania")
-                    self.partial = True
-                    if not self.error:
-                        self.error = f"{type(error).__name__}: {error}"
-                        self.failed.emit(self.error)
+
+
+class SortItem(QTableWidgetItem):
+    def __init__(self, text, index, number=None):
+        super().__init__(text)
+        self.setData(Qt.ItemDataRole.UserRole, index)
+        self.number = number
+
+    def __lt__(self, other):
+        if self.column() in (2, 3, 4, 5):
+            return (self.number if self.number is not None else -1) < (getattr(other, "number", None) if getattr(other, "number", None) is not None else -1)
+        return self.text().casefold() < other.text().casefold()
 
 
 class MainWindow(QMainWindow):
@@ -89,6 +147,7 @@ class MainWindow(QMainWindow):
         self.report_partial = False
         self.job_output = None
         self.completed_indices = set()
+        self.search_done = False
 
         container = QWidget()
         layout = QVBoxLayout(container)
@@ -120,8 +179,20 @@ class MainWindow(QMainWindow):
         self.use_cache.setChecked(True)
         options.addWidget(self.recursive)
         options.addWidget(self.use_cache)
+        self.parallelism = QSpinBox()
+        self.parallelism.setRange(1, 16)
+        self.parallelism.setValue(6)
+        self.parallelism.setPrefix("Równolegle: ")
+        options.addWidget(self.parallelism)
         options.addStretch()
         layout.addLayout(options)
+        tmdb_row = QHBoxLayout()
+        tmdb_row.addWidget(QLabel("Token / klucz TMDB:"))
+        self.tmdb_token = QLineEdit(os.environ.get("TMDB_READ_ACCESS_TOKEN", "") or os.environ.get("TMDB_API_KEY", ""))
+        self.tmdb_token.setEchoMode(QLineEdit.EchoMode.Password)
+        self.tmdb_token.setPlaceholderText("Wpisz lokalnie — token nie jest zapisywany ani umieszczany w raporcie")
+        tmdb_row.addWidget(self.tmdb_token)
+        layout.addLayout(tmdb_row)
 
         output_row = QHBoxLayout()
         output_row.addWidget(QLabel("Raport HTML:"))
@@ -134,7 +205,7 @@ class MainWindow(QMainWindow):
         layout.addLayout(output_row)
 
         actions = QHBoxLayout()
-        self.search_button = QPushButton("Wyszukaj wszystkie filmy")
+        self.search_button = QPushButton("1. Wyszukaj dane")
         self.search_button.clicked.connect(self.start_all)
         self.cancel_button = QPushButton("Anuluj")
         self.cancel_button.setEnabled(False)
@@ -146,7 +217,7 @@ class MainWindow(QMainWindow):
         self.open_button = QPushButton("Otwórz raport")
         self.open_button.setEnabled(False)
         self.open_button.clicked.connect(self.open_report)
-        self.export_button = QPushButton("Zapisz raport")
+        self.export_button = QPushButton("2. Wygeneruj raport")
         self.export_button.clicked.connect(self.export_report)
         for button in (self.search_button, self.cancel_button, self.correct_button, self.link_button, self.export_button, self.open_button):
             actions.addWidget(button)
@@ -155,8 +226,8 @@ class MainWindow(QMainWindow):
         self.progress = QProgressBar()
         self.progress.setValue(0)
         layout.addWidget(self.progress)
-        self.table = QTableWidget(0, 8)
-        self.table.setHorizontalHeaderLabels(["Plik", "Tytuł", "Rok", "Filmweb", "IMDb", "VOD — abonament", "Gatunki", "Stan"])
+        self.table = QTableWidget(0, 9)
+        self.table.setHorizontalHeaderLabels(["Plik", "Tytuł ↗", "Rok", "Filmweb", "IMDb", "TMDB", "VOD — abonament", "Gatunki", "Stan"])
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -168,9 +239,11 @@ class MainWindow(QMainWindow):
         self.table.setColumnWidth(2, 60)
         self.table.setColumnWidth(3, 85)
         self.table.setColumnWidth(4, 85)
-        self.table.setColumnWidth(5, 180)
-        self.table.setColumnWidth(6, 170)
+        self.table.setColumnWidth(5, 85)
+        self.table.setColumnWidth(6, 180)
+        self.table.setColumnWidth(7, 170)
         self.table.itemSelectionChanged.connect(self.show_details)
+        self.table.itemClicked.connect(self.open_title_link)
         layout.addWidget(self.table, 1)
         self.details = QLabel("Wyniki niejednoznaczne można poprawić, wskazując link do właściwego filmu.")
         self.details.setWordWrap(True)
@@ -180,6 +253,16 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.details)
         self.status = QLabel("Gotowe do wczytania listy filmów.")
         layout.addWidget(self.status)
+        credits_row = QHBoxLayout()
+        from PySide6.QtSvgWidgets import QSvgWidget
+        logo = QSvgWidget(str(Path(__file__).with_name("assets") / "tmdb.svg"))
+        logo.setFixedSize(52, 38)
+        credits_row.addWidget(logo)
+        self.attribution = QLabel('<a href="https://www.themoviedb.org/">Źródła i autorzy: TMDB</a> · This product uses the TMDB API but is not endorsed or certified by TMDB.')
+        self.attribution.setWordWrap(True)
+        self.attribution.setOpenExternalLinks(True)
+        credits_row.addWidget(self.attribution, 1)
+        layout.addLayout(credits_row)
         self.setCentralWidget(container)
         self.set_busy(False)
 
@@ -209,10 +292,16 @@ class MainWindow(QMainWindow):
         self.output_path.setText(str(suggested_report_path(path)))
         self.results = [MovieResult(query, notes=["Nie uruchomiono wyszukiwania."]) for query in queries]
         self.completed_indices.clear()
+        self.search_done = False
         self.report_path = None
+        self.search_done = False
+        self.table.setSortingEnabled(False)
+        self.table.clearContents()
         self.table.setRowCount(len(queries))
         for index, result in enumerate(self.results):
             self.update_row(index, result)
+        self.table.setSortingEnabled(True)
+        self.table.sortItems(0, Qt.SortOrder.AscendingOrder)
         self.progress.setValue(0)
         self.status.setText(f"Wczytano {len(queries)} plików. Sprawdź rozpoznane tytuły i lata.")
         self.set_busy(False)
@@ -229,12 +318,12 @@ class MainWindow(QMainWindow):
     def start_jobs(self, jobs):
         if not jobs or not self.source:
             return
-        output = Path(self.output_path.text())
-        if output.exists() and QMessageBox.question(self, "Zastąpić raport?", f"Plik już istnieje:\n{output}\n\nZastąpić go po wyszukiwaniu?") != QMessageBox.StandardButton.Yes:
-            return
-        self.job_output = output
+        self.report_path = None
+        self.search_done = False
+        self.completed_indices.difference_update(index for index, _, _ in jobs)
+        self.table.setSortingEnabled(False)
         cache_directory = Path(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppLocalDataLocation))
-        self.worker = SearchWorker(jobs, cache_directory / "movies.sqlite3", self.use_cache.isChecked(), self)
+        self.worker = SearchWorker(jobs, cache_directory / "movies.sqlite3", self.use_cache.isChecked(), self, workers=self.parallelism.value(), tmdb_credential=self.tmdb_token.text().strip())
         self.worker.result_ready.connect(self.receive_result)
         self.worker.progress.connect(self.update_progress)
         self.worker.finished.connect(self.search_finished)
@@ -255,32 +344,36 @@ class MainWindow(QMainWindow):
     def search_finished(self):
         worker = self.worker
         self.worker = None
-        self.set_busy(False)
+        self.search_done = True
         if worker.error:
             for index, result in enumerate(self.results):
                 if index not in self.completed_indices:
                     result.notes.append(f"Wyszukiwanie przerwane: {worker.error}")
+                    self.update_row(index, result)
         self.report_partial = worker.partial or bool(worker.error) or len(self.completed_indices) < len(self.results)
-        saved = self.save_report(self.job_output, self.report_partial)
+        self.table.setSortingEnabled(True)
+        self.set_busy(False)
+        found = sum(bool(result.entries) for result in self.results)
+        message = (f"Sprawdzono: {len(self.completed_indices)} z {len(self.results)} pozycji.\n"
+                   f"Znaleziono dane: {found}.\n\nPosortuj tabelę klikając nagłówki, a następnie wybierz „2. Wygeneruj raport”.")
+        self.status.setText(f"Wyszukiwanie zakończone. Z danymi: {found}. Posortuj tabelę i wygeneruj raport.")
         if worker.error:
-            message = f"Wyszukiwanie przerwane: {worker.error}"
-            if saved:
-                message += f"\nZapisano raport częściowy:\n{self.report_path}"
-            else:
-                message += "\nWyniki pozostały w tabeli; możesz zapisać je ponownie."
-            self.status.setText(message)
-            QMessageBox.warning(self, "Wyszukiwanie przerwane", message)
-        elif saved:
-            found = sum(bool(result.entries) for result in self.results)
-            heading = "Zapisano raport częściowy" if self.report_partial else "Wyszukiwanie zakończone"
-            message = (f"Sprawdzono: {len(self.completed_indices)} z {len(self.results)} pozycji.\n"
-                       f"Znaleziono dane: {found}.\n\nRaport HTML:\n{self.report_path}")
+            QMessageBox.warning(self, "Wyszukiwanie przerwane", worker.error + "\n" + message)
+        else:
+            heading = "Wyszukiwanie zakończone częściowo" if self.report_partial else "Wyszukiwanie zakończone"
             QMessageBox.information(self, heading, message)
         worker.deleteLater()
 
+    def ordered_results(self):
+        return [self.results[self.result_index(row)] for row in range(self.table.rowCount())]
+
+    def result_index(self, row):
+        item = self.table.item(row, 0)
+        return item.data(Qt.ItemDataRole.UserRole) if item else -1
+
     def save_report(self, output: Path, partial: bool) -> bool:
         try:
-            write_report(output, self.source, self.results, partial)
+            write_report(output, self.source, self.ordered_results(), partial)
         except (OSError, ValueError) as error:
             self.status.setText("Nie udało się zapisać raportu. Wyniki pozostały w tabeli.")
             QMessageBox.warning(self, "Błąd zapisu raportu", str(error))
@@ -293,7 +386,7 @@ class MainWindow(QMainWindow):
         return True
 
     def export_report(self):
-        if not self.source:
+        if not self.source or self.worker is not None or not (self.search_done or self.completed_indices):
             return
         output = Path(self.output_path.text())
         if output.exists() and QMessageBox.question(self, "Zastąpić raport?", f"Zastąpić plik:\n{output}?") != QMessageBox.StandardButton.Yes:
@@ -301,23 +394,53 @@ class MainWindow(QMainWindow):
         self.save_report(output, self.report_partial or len(self.completed_indices) < len(self.results))
 
     def update_row(self, index: int, result: MovieResult):
+        row = next((row for row in range(self.table.rowCount()) if self.result_index(row) == index), index)
+        sorting = self.table.isSortingEnabled()
+        self.table.setSortingEnabled(False)
         movie = result.primary
         genres = next((entry.genres for entry in result.entries if entry.genres), [])
-        ratings = []
-        for source in ("Filmweb", "IMDb"):
+        ratings, numbers = [], {}
+        for column, source in enumerate(("Filmweb", "IMDb", "TMDB"), 3):
             entry = result.entry_for(source)
             ratings.append(f"{entry.rating}/{entry.rating_scale}" if entry and entry.rating else "brak oceny")
+            try:
+                numbers[column] = float(entry.rating.replace(",", ".")) if entry and entry.rating else None
+            except (ValueError, TypeError):
+                numbers[column] = None
+        year = (movie.year if movie else None) or result.query.year
+        numbers[2] = year
         vod = ", ".join(offer.provider_name + (" (dodatkowy pakiet)" if offer.additional_subscription else "") for offer in result.vod.offers)
         values = [result.query.filename, movie.title if movie else result.query.title,
-                  str((movie.year if movie else None) or result.query.year or ""), *ratings, vod or ("brak ofert" if result.vod.checked_at else "—"),
+                  str(year or ""), *ratings, vod or ("brak ofert" if result.vod.checked_at else "—"),
                   translate_genres(genres), result.status if index in self.completed_indices else "Oczekuje"]
         for column, value in enumerate(values):
-            item = QTableWidgetItem(value)
-            item.setToolTip("\n".join(result.notes) if column == 7 else value)
-            self.table.setItem(index, column, item)
+            item = SortItem(value, index, numbers.get(column))
+            item.setToolTip("\n".join(result.notes) if column == 8 else value)
+            if column == 1 and movie:
+                item.setData(Qt.ItemDataRole.UserRole + 1, movie.url)
+                font = item.font()
+                font.setUnderline(True)
+                item.setFont(font)
+                item.setForeground(QColor("#247ac2"))
+                item.setToolTip("Otwórz stronę filmu: " + movie.url)
+            self.table.setItem(row, column, item)
+        self.table.setSortingEnabled(sorting)
+
+    def open_title_link(self, item):
+        if item.column() != 1:
+            return
+        url = item.data(Qt.ItemDataRole.UserRole + 1)
+        index = item.data(Qt.ItemDataRole.UserRole)
+        movie = self.results[index].primary
+        if url and movie:
+            try:
+                url = validate_movie_url(url, movie.source)
+            except Exception:
+                return
+            QDesktopServices.openUrl(QUrl(url))
 
     def show_details(self):
-        index = self.table.currentRow()
+        index = self.result_index(self.table.currentRow())
         if index < 0 or index >= len(self.results):
             return
         result = self.results[index]
@@ -328,7 +451,7 @@ class MainWindow(QMainWindow):
         self.details.setText(text[:1800])
 
     def correct_query(self):
-        index = self.table.currentRow()
+        index = self.result_index(self.table.currentRow())
         if index < 0:
             QMessageBox.information(self, "Wybierz film", "Najpierw zaznacz wiersz na liście.")
             return
@@ -349,17 +472,18 @@ class MainWindow(QMainWindow):
         self.status.setText("Zmieniono zapytanie. Raport wymaga ponownego wygenerowania.")
 
     def lookup_link(self):
-        index = self.table.currentRow()
+        index = self.result_index(self.table.currentRow())
         if index < 0:
             QMessageBox.information(self, "Wybierz film", "Najpierw zaznacz wiersz na liście.")
             return
         result = self.results[index]
-        url, accepted = QInputDialog.getText(self, "Wskaż właściwy film", "Pełny adres HTTPS filmu w Filmweb lub IMDb:", text=result.primary.url if result.primary else "")
+        url, accepted = QInputDialog.getText(self, "Wskaż właściwy film", "Pełny adres HTTPS filmu w Filmweb, IMDb lub TMDB:", text=result.primary.url if result.primary else "")
         if not accepted or not url.strip():
             return
         try:
             from urllib.parse import urlsplit
-            source = "Filmweb" if urlsplit(url.strip()).hostname in ("filmweb.pl", "www.filmweb.pl") else "IMDb"
+            hostname = urlsplit(url.strip()).hostname
+            source = "Filmweb" if hostname in ("filmweb.pl", "www.filmweb.pl") else "TMDB" if hostname in ("themoviedb.org", "www.themoviedb.org") else "IMDb"
             url = validate_movie_url(url.strip(), source)
         except ValueError as error:
             QMessageBox.warning(self, "Niepoprawny adres", str(error))
@@ -376,10 +500,11 @@ class MainWindow(QMainWindow):
             self.status.setText("Anulowanie po zakończeniu bieżącego żądania sieciowego…")
 
     def set_busy(self, busy: bool):
-        for control in (self.directory_button, self.text_button, self.recursive, self.use_cache):
+        for control in (self.directory_button, self.text_button, self.recursive, self.use_cache, self.parallelism, self.tmdb_token):
             control.setEnabled(not busy)
         for control in (self.search_button, self.correct_button, self.link_button, self.output_button, self.export_button):
             control.setEnabled(not busy and bool(self.results))
+        self.export_button.setEnabled(not busy and bool(self.results) and (self.search_done or bool(self.completed_indices)))
         self.cancel_button.setEnabled(busy)
         self.open_button.setEnabled(not busy and self.report_path is not None)
 

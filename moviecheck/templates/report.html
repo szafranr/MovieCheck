@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https:; style-src 'unsafe-inline'; script-src 'nonce-{{ script_nonce }}'; base-uri 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: data:; style-src 'unsafe-inline'; script-src 'nonce-{{ script_nonce }}'; base-uri 'none'">
   <title>{{ source }} — MovieCheck</title>
   <style>
     :root { color-scheme: light dark; --background: #f3f5f8; --surface: #fff; --text: #182230; --muted: #536174; --accent: #145da0; --border: #d9e1ec; }
@@ -53,7 +53,7 @@
   {% for result in results %}
     {% set movie = result.primary %}
     {% set description = result.description_entry %}
-    {% set poster = result.entries|selectattr('poster_url')|first %}
+    {% set poster = result.poster_entry %}
     {% set poster_url = poster.poster_url|image_url if poster else '' %}
     <li><article>
       {% if poster_url %}
@@ -67,7 +67,7 @@
         {% if movie and movie.year %} ({{ movie.year }}){% elif result.query.year %} ({{ result.query.year }}){% endif %}
       </h2>
       <div class="ratings">
-      {% for source_name in ['Filmweb', 'IMDb'] %}
+      {% for source_name in ['Filmweb', 'IMDb', 'TMDB'] %}
         {% set entry = result.entry_for(source_name) %}
         <span class="badge"{% if entry and entry.rating_source %} title="{{ entry.rating_source }}"{% endif %}>{{ source_name }}: {% if entry and entry.rating %}{{ entry.rating }} / {{ entry.rating_scale }}{% else %}brak oceny{% endif %}</span>
       {% endfor %}
@@ -99,6 +99,7 @@
   </ol>
   <footer>MovieCheck {{ app_version }} · Oceny i opisy pochodzą ze wskazanych źródeł. Oceny z pamięci mogą mieć do 7 dni, a dostępność VOD do 6 godzin. Brak oceny nie oznacza oceny zero. Oferty dotyczą Polski i mogą się zmieniać.
     <p>Information courtesy of <a href="https://www.imdb.com/" target="_blank" rel="noopener noreferrer">IMDb</a>. Used with permission. Dane IMDb do użytku osobistego i niekomercyjnego.</p>
+    <p><img src="{{ tmdb_logo }}" width="52" height="38" alt="TMDB" style="vertical-align:middle;object-fit:contain"> <a href="https://www.themoviedb.org/" target="_blank" rel="noopener noreferrer">TMDB</a> · This product uses the TMDB API but is not endorsed or certified by TMDB.</p>
   </footer>
 </main>
 <script nonce="{{ script_nonce }}">

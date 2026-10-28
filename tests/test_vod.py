@@ -96,7 +96,7 @@ class VodTests(unittest.TestCase):
             path = Path(directory) / "report.html"
             write_report(path, Path("lista.txt"), [result])
             soup = BeautifulSoup(path.read_text(encoding="utf-8"), "html.parser")
-            self.assertEqual([item.get_text(strip=True) for item in soup.select(".badge")], ["Filmweb: 7.3 / 10", "IMDb: 8.1 / 10"])
+            self.assertEqual([item.get_text(strip=True) for item in soup.select(".badge")], ["Filmweb: 7.3 / 10", "IMDb: 8.1 / 10", "TMDB: brak oceny"])
             vod = soup.select_one(".vod")
             self.assertIn("Netflix", vod.get_text())
             self.assertNotIn("Apple TV Store", vod.get_text())
@@ -110,5 +110,5 @@ class VodTests(unittest.TestCase):
             result = MovieResult(MovieQuery("Film.mkv", "Film"), [MovieData("Film", "https://www.filmweb.pl/film/Film-2020-1", "Filmweb", rating="7.3")])
             write_report(path, Path("lista.txt"), [result])
             soup = BeautifulSoup(path.read_text(encoding="utf-8"), "html.parser")
-            self.assertEqual([item.get_text(strip=True) for item in soup.select(".badge")], ["Filmweb: 7.3 / 10", "IMDb: brak oceny"])
+            self.assertEqual([item.get_text(strip=True) for item in soup.select(".badge")], ["Filmweb: 7.3 / 10", "IMDb: brak oceny", "TMDB: brak oceny"])
             self.assertIsNone(soup.select_one(".vod"))

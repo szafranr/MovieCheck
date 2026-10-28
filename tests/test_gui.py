@@ -20,7 +20,7 @@ class GuiTests(unittest.TestCase):
         cls.application = QApplication.instance() or QApplication([])
         cls.application.setApplicationName("MovieCheckTest")
 
-    def test_window_loads_searches_and_writes_report(self):
+    def test_window_searches_then_exports_report_explicitly(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             listing = root / "lista.txt"
@@ -40,8 +40,8 @@ class GuiTests(unittest.TestCase):
 
             vod = VodAvailability([VodOffer("Netflix", "https://www.netflix.com/title/1")], "2026-10-27 12:00")
             def show_completion(parent, title, message):
-                self.assertTrue((root / "lista.html").exists())
-                self.assertIn(str(root / "lista.html"), message)
+                self.assertFalse((root / "lista.html").exists())
+                self.assertIn("Wygeneruj raport", message)
                 self.assertEqual(title, "Wyszukiwanie zakończone")
 
             with patch("moviecheck.providers.WebProvider.search", autospec=True, side_effect=fake_search), patch("moviecheck.imdb.IMDbProvider.search", autospec=True, side_effect=fake_search), patch("moviecheck.vod.FilmwebVod.lookup", return_value=vod), patch("moviecheck.app.QMessageBox.warning") as warning, patch("moviecheck.app.QMessageBox.information", side_effect=show_completion) as information:
@@ -58,11 +58,13 @@ class GuiTests(unittest.TestCase):
                     self.fail("Wątek wyszukiwania nie zakończył się w wymaganym czasie.")
                 warning.assert_not_called()
                 information.assert_called_once()
+            self.assertFalse((root / "lista.html").exists())
+            window.export_report()
             self.assertTrue((root / "lista.html").exists())
             self.assertEqual(window.table.item(0, 3).text(), "7/10")
             self.assertEqual(window.table.item(0, 4).text(), "8.1/10")
-            self.assertEqual(window.table.item(0, 5).text(), "Netflix")
-            self.assertEqual(window.table.item(0, 7).text(), "Znaleziono")
+            self.assertEqual(window.table.item(0, 6).text(), "Netflix")
+            self.assertEqual(window.table.item(0, 8).text(), "Znaleziono")
             self.assertTrue(window.open_button.isEnabled())
             self.assertTrue(window.search_button.isEnabled())
             window.close()
@@ -82,14 +84,16 @@ class GuiTests(unittest.TestCase):
             window.job_output = root / "lista.html"
             window.completed_indices = {0}
             with patch("moviecheck.app.write_report", side_effect=OSError("Brak uprawnień")), patch("moviecheck.app.QMessageBox.warning") as warning, patch("moviecheck.app.QMessageBox.information") as information:
-                window.search_finished()
+                window.search_done = True
+                window.worker = None
+                window.export_report()
                 warning.assert_called_once()
                 information.assert_not_called()
             window.close()
             window.deleteLater()
             self.application.processEvents()
 
-    def test_partial_completion_message_follows_saved_report(self):
+    def test_partial_search_does_not_generate_report(self):
         from unittest.mock import Mock
 
         with tempfile.TemporaryDirectory() as directory:
@@ -102,8 +106,9 @@ class GuiTests(unittest.TestCase):
             window.job_output = root / "lista.html"
             with patch("moviecheck.app.QMessageBox.information") as information:
                 window.search_finished()
-                self.assertTrue(window.job_output.exists())
-                self.assertEqual(information.call_args.args[1], "Zapisano raport częściowy")
+                self.assertFalse(window.job_output.exists())
+                self.assertTrue(window.export_button.isEnabled())
+                self.assertEqual(information.call_args.args[1], "Wyszukiwanie zakończone częściowo")
             window.close()
             window.deleteLater()
             self.application.processEvents()

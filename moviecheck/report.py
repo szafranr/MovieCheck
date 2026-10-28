@@ -1,4 +1,5 @@
 import os
+import base64
 import secrets
 import tempfile
 from datetime import datetime
@@ -28,8 +29,10 @@ def write_report(path: Path, source: Path, results: list[MovieResult], partial: 
     environment = Environment(loader=PackageLoader("moviecheck", "templates"), autoescape=select_autoescape(["html"]))
     environment.filters["genres"] = translate_genres
     environment.filters["image_url"] = image_url
+    logo = Path(__file__).with_name("assets") / "tmdb.svg"
+    tmdb_logo = "data:image/svg+xml;base64," + base64.b64encode(logo.read_bytes()).decode("ascii")
     content = environment.get_template("report.html").render(
-        source=source.name, results=results, partial=partial, script_nonce=secrets.token_urlsafe(18), app_version=__version__,
+        source=source.name, results=results, tmdb_logo=tmdb_logo, partial=partial, script_nonce=secrets.token_urlsafe(18), app_version=__version__,
         generated=datetime.now().astimezone().strftime("%Y-%m-%d %H:%M %Z"),
         found=sum(bool(result.entries) for result in results),
     )

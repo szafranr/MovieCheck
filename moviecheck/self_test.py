@@ -22,6 +22,7 @@ def run_self_test(output: Path) -> int:
         from .models import MovieData, MovieResult
         from .report import write_report
         from .service import MovieService
+        from concurrent.futures import ThreadPoolExecutor
 
         application = QApplication.instance() or QApplication([])
         application.setApplicationName("MovieCheck")
@@ -47,13 +48,23 @@ def run_self_test(output: Path) -> int:
                     raise RuntimeError("SQLite nie działa w pakiecie.")
             finally:
                 cache.close()
+            def check_cache(index):
+                local = MovieCache(root / "cache.sqlite3")
+                try:
+                    local.put(str(index), {"value": index})
+                    return local.get(str(index)) == {"value": index}
+                finally:
+                    local.close()
+            with ThreadPoolExecutor(max_workers=3) as executor:
+                if not all(executor.map(check_cache, range(6))):
+                    raise RuntimeError("Nieudana współbieżna obsługa SQLite.")
             movie = MovieData("Test Movie", "https://www.imdb.com/title/tt1", "IMDb", rating="7.1", description="Opis testowy.")
             report = output.with_suffix(".html")
             write_report(report, source, [MovieResult(query, [movie])])
             html = report.read_text(encoding="utf-8")
             if "Opis testowy." not in html or f"MovieCheck {__version__}" not in html:
                 raise RuntimeError("Nieprawidłowy szablon raportu w pakiecie.")
-        result.update(ok=True, icon=True, qt=True, sqlite=True, tls=True, report=str(report), input=True)
+        result.update(ok=True, icon=True, qt=True, sqlite=True, tls=True, parallel_cache=True, report=str(report), input=True)
     except Exception as error:
         result["error"] = f"{type(error).__name__}: {error}"
     finally:

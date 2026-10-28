@@ -23,6 +23,7 @@ class IMDbRatings:
         self.status = status
         self.failure = ""
         self.refreshed = False
+        self.batch_state = vars(cache).get("batch_state")
 
     def import_ratings(self, path: Path):
         connection = self.cache.connection
@@ -56,6 +57,7 @@ class IMDbRatings:
     def download(self):
         self.status("Przygotowywanie niezależnych ocen IMDb — pobieranie bazy")
         temporary = None
+        started = time.perf_counter()
         try:
             with tempfile.NamedTemporaryFile(dir=self.cache.path.parent, suffix=".tsv.gz", delete=False) as output:
                 temporary = Path(output.name)
@@ -69,8 +71,15 @@ class IMDbRatings:
                         if size > 100 * 1024 * 1024:
                             raise ProviderError("Zbiór ocen IMDb przekracza dopuszczalny rozmiar.")
                         output.write(chunk)
+            if self.batch_state:
+                self.batch_state.record("IMDb pobranie zbioru", time.perf_counter() - started)
             self.status("Przygotowywanie niezależnych ocen IMDb — indeksowanie bazy")
-            self.import_ratings(temporary)
+            index_started = time.perf_counter()
+            try:
+                self.import_ratings(temporary)
+            finally:
+                if self.batch_state:
+                    self.batch_state.record("IMDb indeksowanie", time.perf_counter() - index_started)
         except (httpx.HTTPError, OSError, ValueError, EOFError) as error:
             raise ProviderError(f"Nie udało się przygotować zbioru ocen IMDb: {type(error).__name__}.") from error
         finally:
@@ -78,6 +87,19 @@ class IMDbRatings:
                 temporary.unlink(missing_ok=True)
 
     def get(self, movie_id: str) -> str:
+        if not self.batch_state:
+            return self._get(movie_id)
+        with self.batch_state.measure("IMDb indeks (łącznie z oczekiwaniem)"):
+            with self.batch_state.ratings_lock:
+                self.failure = self.batch_state.ratings_failure
+                self.refreshed = self.batch_state.ratings_refreshed
+                try:
+                    return self._get(movie_id)
+                finally:
+                    self.batch_state.ratings_failure = self.failure
+                    self.batch_state.ratings_refreshed = self.refreshed
+
+    def _get(self, movie_id: str) -> str:
         if self.failure:
             raise ProviderError(self.failure)
         connection = self.cache.connection
@@ -154,7 +176,7 @@ class IMDbProvider(WebProvider):
             if cached.get("rating_source") == "IMDb — oficjalny zbiór ocen":
                 return self.dataset_movie(MovieData(**cached))
             return MovieData(**cached)
-        if not self.pages_unavailable:
+        if not self.pages_unavailable and not (self.batch_state and self.batch_state.pages_unavailable.is_set()):
             try:
                 movie = super().get_movie(url)
                 if movie.rating:
@@ -164,6 +186,8 @@ class IMDbProvider(WebProvider):
                 if self.cancelled():
                     raise
                 self.pages_unavailable = True
+                if self.batch_state:
+                    self.batch_state.pages_unavailable.set()
                 movie = None
         else:
             movie = None

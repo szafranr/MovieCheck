@@ -9,7 +9,8 @@ class MovieCache:
         self.path = path
         self.enabled = enabled
         path.parent.mkdir(parents=True, exist_ok=True)
-        self.connection = sqlite3.connect(path)
+        self.connection = sqlite3.connect(path, timeout=30)
+        self.connection.execute("PRAGMA journal_mode=WAL")
         self.connection.execute("CREATE TABLE IF NOT EXISTS movies (url TEXT PRIMARY KEY, fetched REAL NOT NULL, payload TEXT NOT NULL)")
 
     def get(self, url: str) -> dict | None:

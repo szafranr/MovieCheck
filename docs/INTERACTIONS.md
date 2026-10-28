@@ -1,5 +1,43 @@
 # Dziennik interakcji i prac
 
+## 2026-10-28 — Równoległość, TMDB, sortowanie i dwa kroki raportowania, wersja 0.1.14
+
+### Polecenie użytkownika
+
+> wyszukiwanie trwa dość wolno, zbadaj co zajmuje najwięcej czasu, wdróż wyszukiwanie równoległe wszystkich tytułów.
+> dołóż ocenę z bazy tmdb
+> oddziel wyszukiwanie i generowanie raportu na dwa kroki.
+> pierwszy krok to wyszukiwanie danych, jak się zakonczy użytkownik powinien móc posortować dane po kolumnach z rankingami, po tytułach. dodatkowo, komórka z tytułem powinna byc aktywnym linkiem do filmweb jak dostepny opis lub imdb/tmdb jak niedostepny na filmweb. dla normalizacji okładki filmów pobieraj w pierwszej kolejności z bazy tmdb
+> krok drugi: wygeneruj raport powinien uwzględnić sortowanie uzytkownika
+
+### Diagnoza i pomiary
+
+- Przeczytano instrukcje, README i dziennik; użyto CodeGraph przed analizą dostawców, pamięci, SearchWorker i okna. Nie delegowano prac.
+- Przeprowadzono rzeczywistą próbę dotychczasowej serii dla Inception (2010), Interstellar (2014), The Matrix (1999), z osobną pustą pamięcią SQLite: 53,205 s. Filmweb, wraz z oczekiwaniem na limit żądań, zajmował 41,929 s; IMDb HTTP 1,512 s; pobranie i import bazy IMDb 7,646 s. Filmweb sprawdza do pięciu kandydatów, ich podglądy i strony oraz VOD; kolejne tytuły dotąd czekały na całość poprzedniego.
+- Analogiczna rzeczywista próba po wdrożeniu puli (maks. 6 pracowników, 3 tytuły, osobny zimny cache) trwała 23,305 s, około 2,28× szybciej. Obie próby bez klucza TMDB; wynik jest obserwacją, nie gwarancją. Sumy etapów równoległych nakładają się, w tym oczekiwanie kilku pracowników na jeden import. Dane lokalnie w build/profile-baseline.json, build/profile-parallel.json i odpowiadających logach; opis w docs/PERFORMANCE.md.
+
+### Wdrożenie
+
+- SearchWorker używa ThreadPoolExecutor i kolejki wszystkich tytułów; domyślnie 6 równoległych pracowników, regulacja 1–16. Nie tworzy osobnego wątku dla każdej pozycji. Każdy pracownik ma własnych klientów HTTP i połączenie SQLite; WAL i timeout 30 s umożliwiają współdzielenie pamięci bez przekazywania połączenia między wątkami.
+- BatchState współdzieli blokadę importu IMDb, stan odświeżenia i nieudanego pobrania oraz informację o niedostępności strony IMDb. Baza pobiera się i indeksuje raz na serię także przy wyłączonym cache wyników; nieudane pobranie nie jest ponawiane dla każdego filmu. Nadal działają przerwanie po błędzie konkretnego filmu, kontynuacja pozostałych, anulowanie i zamykanie zasobów.
+- Pozostawiono odstęp 1,1 s wewnątrz adapterów Filmweb/IMDb każdego pracownika; dodano globalny odstęp co najmniej 0,2 s między startami żądań do tego samego hosta. Pomiary w moviecheck.performance trafiają do errors.log: czas serii, liczba pracowników, etapy źródeł, VOD, opóźnienia ograniczeń, odpowiedzi HTTP, pobranie i indeksowanie IMDb. Dodano scripts/profile_search.py do powtarzania prób.
+- Dodano oficjalny adapter TMDB: autoryzacja Bearer lub klucz API v3, polskie metadane z angielskim opisem zapasowym, vote_average tylko przy co najmniej jednym głosie, wyszukiwanie po identyfikatorze IMDb albo tytule/roku i wariantach apostrofu, kontrola niejednoznaczności oraz bezpieczne linki ręczne TMDB. Plakaty TMDB w500 mają pierwszeństwo przed Filmweb i IMDb.
+- TMDB wymaga własnego tokenu/klucza użytkownika. Dodano maskowane pole oraz obsługę TMDB_READ_ACCESS_TOKEN i TMDB_API_KEY. Klucz nie trafia do QSettings, cache, raportu ani własnych pomiarów. Bez niego Filmweb i IMDb działają, a wynik TMDB wskazuje brak konfiguracji. Nie otrzymano i nie używano rzeczywistego klucza, więc API TMDB sprawdzano kontrolowanymi odpowiedziami HTTP.
+- Pobieranie jest krokiem „1. Wyszukaj dane”. Zakończenie pokazuje podsumowanie i instrukcję dalszego sortowania; HTML nie jest wtedy zapisywany ani nadpisywany. Także przy anulowaniu lub błędzie całej serii dotychczasowe wyniki pozostają do jawnego eksportu.
+- Dodano trzy kolumny ocen, sortowanie liczbowe ocen i roku oraz sortowanie tytułów. Stały identyfikator pozycji w danych komórek utrzymuje zgodność wyników, zaznaczenia, linku i korekty po zmianie kolejności, także przy spóźnionym wyniku pracownika.
+- Podkreślony tytuł otwiera Filmweb, jeśli ma opis; w przeciwnym razie IMDb z opisem lub TMDB z opisem. Przy braku opisów zachowuje pierwszą dostępną stronę. Ten sam wybór obowiązuje w HTML. Plakat jest niezależnie preferowany z TMDB.
+- Krok „2. Wygeneruj raport” pobiera bieżącą kolejność wierszy. Nadpisanie wymaga potwierdzenia dopiero podczas eksportu. Raport zawiera trzy niezależne oceny i oznaczenia źródeł.
+- Do sekcji źródeł i autorów oraz stopki HTML dodano oficjalne logo TMDB bez modyfikacji i wymagany komunikat. Źródło logo i odnośniki dokumentacji zapisano w README. Zwiększono wersję dokładnie raz przez build.py bump: 0.1.13 → 0.1.14.
+
+### Weryfikacja i wynik
+
+- 106 testów przeszło. Nowe przypadki potwierdzają rzeczywiste nakładanie się czterech zadań z barierą, osobne połączenia SQLite, monotoniczny postęp, anulowanie, jednorazowy import i jednorazowe zapamiętanie błędu bazy IMDb, trzy numeryczne sortowania, kolejność HTML, stabilność korekty i późnych wyników, klikalny tytuł, autoryzację i cache TMDB bez klucza w zapisanych adresach, ocenę/brak głosów, plakaty, rok, niejednoznaczność i zapasowy język.
+- Dostosowano istniejące testy GUI i odporności do dwóch kroków, zachowując test błędu pojedynczego filmu i nieudanego zapisu. Test gotowego pakietu obejmuje również współbieżny zapis i odczyt SQLite.
+- Zbudowano dist/releases/MovieCheck-0.1.14-windows-x64.exe z manifestem i SHA-256. Gotowy EXE uruchomiony w pustym katalogu przeszedł test Qt, ikony, TLS, współbieżnego cache, wejścia i HTML. Wynik w build/package/windows/smoke.json.
+- Obejrzano zrzut okna Qt offscreen z trzema ocenami, sortowaniem i dwoma krokami (build/app-0.1.14.png). Nie używano automatyzacji okien pulpitu. Mac wymaga osobnego zbudowania i testu na rzeczywistym systemie.
+- Dokumentacja i identyfikatory zachowują języki wymagane przez użytkownika. Iterację kończy lokalny commit; pliki examples zmienione przez użytkownika i indeks .codegraph pozostają poza commitem. Nie publikowano wydania ani nie wysyłano commitów do GitHub.
+- Źródła oficjalne: https://developer.themoviedb.org/docs/authentication-application, https://developer.themoviedb.org/reference/search-movie, https://developer.themoviedb.org/docs/image-basics, https://developer.themoviedb.org/docs/faq. Logo: https://www.themoviedb.org/assets/2/v4/logos/v2/blue_square_2-d537fb228cf3ded904ef09b136fe3fec72548ebc1fea3fbbd1ad9e36364db38b.svg.
+
 ## 2026-10-27 — Instrukcja publikacji MD i błąd testu podczas budowania macOS
 
 ### Polecenie i materiał użytkownika
