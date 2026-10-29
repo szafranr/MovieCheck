@@ -7,7 +7,7 @@ name = "moviecheck"
 dynamic = ["version"]
 description = "Katalog filmów z raportem HTML — Windows i macOS"
 requires-python = ">=3.11"
-dependencies = ["PySide6>=6.7,<7", "httpx>=0.27,<1", "beautifulsoup4>=4.12,<5", "Jinja2>=3.1.6,<4"]
+dependencies = ["PySide6>=6.7,<7", "httpx>=0.27,<1", "beautifulsoup4>=4.12,<5", "Jinja2>=3.1.6,<4", "keyring>=25.6,<26"]
 
 [project.optional-dependencies]
 build = ["PyInstaller>=6.15,<7", "Pillow>=11,<14"]

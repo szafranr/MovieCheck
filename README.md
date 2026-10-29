@@ -157,7 +157,13 @@ Lokalna pamięć wyników i indeks ocen IMDb znajdują się w pliku `movies.sqli
 
 ## TMDB: ocena, opis i okładka
 
-Integracja korzysta z oficjalnego API TMDB. W ustawieniach API swojego konta TMDB uzyskaj API Read Access Token (Bearer) albo klucz v3 i wpisz go w polu aplikacji. Możesz również ustawić zmienną środowiskową `TMDB_READ_ACCESS_TOKEN` lub `TMDB_API_KEY` przed uruchomieniem. Pole jest maskowane; wartość nie jest zapisywana w QSettings, pamięci wyników, HTML ani pomiarach. Nie przesyłaj klucza w zgłoszeniu błędu.
+Integracja korzysta z oficjalnego API TMDB. W ustawieniach API swojego konta TMDB uzyskaj API Read Access Token (Bearer) albo klucz v3 i wpisz go w polu aplikacji. Możesz również ustawić zmienną środowiskową `TMDB_READ_ACCESS_TOKEN` lub `TMDB_API_KEY` przed uruchomieniem. Pole jest maskowane. Kliknij „Zapisz token”, aby zachować go między uruchomieniami. Rozpoczęcie wyszukiwania również zapisuje nowy lub zmieniony token. Zapis odbywa się przez keyring w natywnym magazynie bieżącego użytkownika: Pęku kluczy macOS albo Menedżerze poświadczeń Windows, pod usługą `MovieCheck.TMDB` i kontem `api-token`. Aplikacja nie zapisuje sekretu w QSettings, pamięci wyników, HTML ani pomiarach. Nie przesyłaj klucza w zgłoszeniu błędu.
+
+Przy uruchomieniu token ze zmiennej środowiskowej ma pierwszeństwo, następnie używany jest token z magazynu systemowego. „Usuń zapisany” usuwa wpis z magazynu i czyści pole. Puste pole wyłącza TMDB w bieżącym wyszukiwaniu, również jeśli zmienna środowiskowa jest ustawiona. Usunięcie wpisu nie zmienia zmiennych środowiskowych systemu — przy ponownym uruchomieniu ponownie mogą wypełnić pole. Wyczyszczenie samego pola bez przycisku usuwania nie kasuje zapisanego tokenu.
+
+Jeśli magazyn jest zablokowany lub zapis/odczyt się nie powiedzie, pod polem pojawia się komunikat; aplikacja nadal może używać ręcznie wpisanego tokenu w bieżącej sesji. Nie ma awaryjnego zapisu w pliku tekstowym. macOS może poprosić o zezwolenie aplikacji na dostęp do Pęku kluczy. Zapisany token można usunąć także narzędziem systemowym. Przy aktualizacji uruchomienia ze źródeł odśwież zależności przez `.venv/bin/python -m pip install -e .` (Windows: `.\.venv\Scripts\python.exe -m pip install -e .`); launcher macOS robi to automatycznie po zmianie wersji. Gotowy EXE zawiera potrzebną bibliotekę.
+
+[Dokumentacja systemowych magazynów keyring](https://keyring.readthedocs.io/en/latest/).
 
 Bez klucza pozostałe źródła działają; TMDB nie wysyła zapytań API, pokazuje brak oceny i uwagę o konfiguracji przy wyniku. Jest to obsługiwana sytuacja, bez przerywania wyszukiwania, okna błędu całej serii czy śladu wyjątku w errors.log. Nieprawidłowy podany klucz także daje uwagę przy wyniku TMDB, a pozostałe źródła są nadal przetwarzane. Nie wpisujemy do kodu wspólnego klucza dystrybucyjnego. Ocena TMDB pochodzi z `vote_average` i jest pokazywana tylko przy co najmniej jednym głosie. Dopasowanie wykorzystuje identyfikator IMDb, jeśli go znamy, a w pozostałych przypadkach tytuł, warianty apostrofów i rok. Niejednoznaczne wyniki wymagają ręcznego linku. Polski opis ma pierwszeństwo przed angielskim opisem TMDB; opis Filmweb ma pierwszeństwo w całej aplikacji.
 
@@ -200,7 +206,7 @@ Na Macu otwórz Finder, naciśnij Cmd+Shift+G i wklej ścieżkę katalogu. Nagł
 
 [Ścieżki Qt](https://doc.qt.io/qt-6/qstandardpaths.html), [Qt — dodawanie organizacji i nazwy aplikacji na macOS](https://github.com/qt/qtbase/blob/6.10/src/corelib/io/qstandardpaths_mac.mm), [Apple — raporty awarii w Konsoli](https://support.apple.com/guide/console/reports-cnsl664be99a/mac). Okno pokazuje ścieżki aktualnego środowiska, które mogą się różnić przy zmianie konfiguracji systemu.
 
-Data publikacji jest stałą metadanych wersji `__release_date__` w `moviecheck/__init__.py`, a autor pochodzi z `__author__`. Dla 0.1.15 data wynosi 28.10.2026. Ponowne budowanie nie zmienia daty. To data przypisana wersji, a nie odczyt daty publikacji z GitHub Releases.
+Data publikacji jest stałą metadanych wersji `__release_date__` w `moviecheck/__init__.py`, a autor pochodzi z `__author__`. Dla 0.1.16 data wynosi 29.10.2026. Ponowne budowanie nie zmienia daty. To data przypisana wersji, a nie odczyt daty publikacji z GitHub Releases.
 
 ## Testy i diagnostyka
 

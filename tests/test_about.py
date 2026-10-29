@@ -18,6 +18,10 @@ from moviecheck.service import MovieService
 class AboutTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        credential_patch = patch("moviecheck.app.TMDBTokenStore")
+        store = credential_patch.start()
+        store.return_value.load.return_value = ""
+        cls.addClassCleanup(credential_patch.stop)
         cls.application = QApplication.instance() or QApplication([])
 
     def test_about_shows_metadata_paths_and_copies_diagnostics(self):

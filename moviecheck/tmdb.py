@@ -15,10 +15,11 @@ from .providers import ProviderError, match_score, search_title_variants, valida
 class TMDBProvider:
     source = "TMDB"
 
-    def __init__(self, cache, credential="", cancelled=lambda: False):
+    def __init__(self, cache, credential=None, cancelled=lambda: False):
         self.cache = cache
         self.cancelled = cancelled
-        self.credential = credential or os.environ.get("TMDB_READ_ACCESS_TOKEN", "") or os.environ.get("TMDB_API_KEY", "")
+        self.credential = (os.environ.get("TMDB_READ_ACCESS_TOKEN", "") or os.environ.get("TMDB_API_KEY", "")) if credential is None else credential
+        self.credential = self.credential.strip()
         self.batch_state = vars(cache).get("batch_state")
         self.imdb_id = ""
         self.client = httpx.Client(timeout=httpx.Timeout(20, connect=10), follow_redirects=False)

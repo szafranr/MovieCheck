@@ -26,6 +26,10 @@ def result_for(query, score="8", source="IMDb"):
 class ParallelTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        credential_patch = patch("moviecheck.app.TMDBTokenStore")
+        store = credential_patch.start()
+        store.return_value.load.return_value = ""
+        cls.addClassCleanup(credential_patch.stop)
         cls.application = QApplication.instance() or QApplication([])
 
     def test_titles_actually_overlap_and_each_thread_owns_its_cache(self):

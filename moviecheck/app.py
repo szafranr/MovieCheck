@@ -25,6 +25,7 @@ from .report import translate_genres, write_report
 from .service import MovieService
 from .performance import BatchState
 from .about import AboutDialog, data_directory
+from .credentials import CredentialStoreError, TMDBTokenStore
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,7 @@ class SearchWorker(QThread):
     progress = Signal(int, int, str)
     failed = Signal(str)
 
-    def __init__(self, jobs, cache_path: Path, use_cache: bool, parent=None, *, workers=6, tmdb_credential=""):
+    def __init__(self, jobs, cache_path: Path, use_cache: bool, parent=None, *, workers=6, tmdb_credential=None):
         super().__init__(parent)
         self.jobs = jobs
         self.cache_path = cache_path
@@ -135,12 +136,21 @@ class SortItem(QTableWidgetItem):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, *, token_store=None):
         super().__init__()
         self.setWindowTitle(f"MovieCheck {__version__} — katalog filmów")
         self.setWindowIcon(QIcon(str(Path(__file__).with_name("assets") / "moviecheck.png")))
         self.resize(1180, 760)
         self.settings = QSettings("MovieCheck", "MovieCheck")
+        self.token_store = token_store if token_store is not None else TMDBTokenStore()
+        token_status = ""
+        try:
+            self.saved_tmdb_token = self.token_store.load()
+            if self.saved_tmdb_token:
+                token_status = "Wczytano zapisany token TMDB."
+        except CredentialStoreError as error:
+            self.saved_tmdb_token = ""
+            token_status = str(error)
         self.source = None
         self.results = []
         self.worker = None
@@ -199,11 +209,22 @@ class MainWindow(QMainWindow):
         layout.addLayout(options)
         tmdb_row = QHBoxLayout()
         tmdb_row.addWidget(QLabel("Token / klucz TMDB:"))
-        self.tmdb_token = QLineEdit(os.environ.get("TMDB_READ_ACCESS_TOKEN", "") or os.environ.get("TMDB_API_KEY", ""))
+        self.tmdb_token = QLineEdit(os.environ.get("TMDB_READ_ACCESS_TOKEN", "") or os.environ.get("TMDB_API_KEY", "") or self.saved_tmdb_token)
         self.tmdb_token.setEchoMode(QLineEdit.EchoMode.Password)
-        self.tmdb_token.setPlaceholderText("Wpisz lokalnie — token nie jest zapisywany ani umieszczany w raporcie")
+        self.tmdb_token.setPlaceholderText("Token można zapamiętać w systemowym magazynie poświadczeń")
         tmdb_row.addWidget(self.tmdb_token)
+        self.save_token_button = QPushButton("Zapisz token")
+        self.save_token_button.clicked.connect(self.save_tmdb_token)
+        tmdb_row.addWidget(self.save_token_button)
+        self.forget_token_button = QPushButton("Usuń zapisany")
+        self.forget_token_button.clicked.connect(self.forget_tmdb_token)
+        tmdb_row.addWidget(self.forget_token_button)
         layout.addLayout(tmdb_row)
+        self.token_status = QLabel(token_status)
+        self.token_status.setTextFormat(Qt.TextFormat.PlainText)
+        self.token_status.setWordWrap(True)
+        self.token_status.setVisible(bool(token_status))
+        layout.addWidget(self.token_status)
 
         output_row = QHBoxLayout()
         output_row.addWidget(QLabel("Raport HTML:"))
@@ -259,7 +280,6 @@ class MainWindow(QMainWindow):
         self.details = QLabel("Wyniki niejednoznaczne można poprawić, wskazując link do właściwego filmu.")
         self.details.setWordWrap(True)
         # Treść z nazw plików i sieci zawsze jest zwykłym tekstem.
-        from PySide6.QtCore import Qt
         self.details.setTextFormat(Qt.TextFormat.PlainText)
         layout.addWidget(self.details)
         self.status = QLabel("Gotowe do wczytania listy filmów.")
@@ -276,6 +296,31 @@ class MainWindow(QMainWindow):
         layout.addLayout(credits_row)
         self.setCentralWidget(container)
         self.set_busy(False)
+
+    def set_token_status(self, text):
+        self.token_status.setText(text)
+        self.token_status.setVisible(bool(text))
+
+    def save_tmdb_token(self):
+        token = self.tmdb_token.text().strip()
+        try:
+            self.token_store.save(token)
+        except CredentialStoreError as error:
+            self.set_token_status(str(error))
+            return False
+        self.saved_tmdb_token = token
+        self.set_token_status("Zapisano token TMDB w systemowym magazynie poświadczeń.")
+        return True
+
+    def forget_tmdb_token(self):
+        try:
+            self.token_store.delete()
+        except CredentialStoreError as error:
+            self.set_token_status(str(error))
+            return
+        self.saved_tmdb_token = ""
+        self.tmdb_token.clear()
+        self.set_token_status("Usunięto zapisany token. Pole TMDB jest puste; możesz wyszukiwać bez TMDB.")
 
     def show_about(self):
         AboutDialog(self).exec()
@@ -332,6 +377,9 @@ class MainWindow(QMainWindow):
     def start_jobs(self, jobs):
         if not jobs or not self.source:
             return
+        token = self.tmdb_token.text().strip()
+        if token and token != self.saved_tmdb_token:
+            self.save_tmdb_token()
         self.report_path = None
         self.search_done = False
         self.completed_indices.difference_update(index for index, _, _ in jobs)
@@ -514,7 +562,7 @@ class MainWindow(QMainWindow):
             self.status.setText("Anulowanie po zakończeniu bieżącego żądania sieciowego…")
 
     def set_busy(self, busy: bool):
-        for control in (self.directory_button, self.text_button, self.recursive, self.use_cache, self.parallelism, self.tmdb_token):
+        for control in (self.directory_button, self.text_button, self.recursive, self.use_cache, self.parallelism, self.tmdb_token, self.save_token_button, self.forget_token_button):
             control.setEnabled(not busy)
         for control in (self.search_button, self.correct_button, self.link_button, self.output_button, self.export_button):
             control.setEnabled(not busy and bool(self.results))

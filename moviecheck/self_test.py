@@ -18,6 +18,7 @@ def run_self_test(output: Path) -> int:
         from PySide6.QtWidgets import QApplication
         from .app import MainWindow
         from .about import AboutDialog, application_paths
+        from .credentials import TMDBTokenStore, native_backend
         from .cache import MovieCache
         from .inputs import load_queries
         from .models import MovieData, MovieResult
@@ -29,7 +30,25 @@ def run_self_test(output: Path) -> int:
         application.setApplicationName("MovieCheck")
         application.setOrganizationName("MovieCheck")
         application.setApplicationVersion(__version__)
-        window = MainWindow()
+        # Sprawdź obecność natywnego adaptera bez dostępu do poświadczeń użytkownika.
+        backend = native_backend()
+        if backend.priority <= 0:
+            raise RuntimeError("Brak natywnego magazynu poświadczeń w pakiecie.")
+        class MemoryBackend:
+            value = None
+            def get_password(self, service, account):
+                return self.value
+            def set_password(self, service, account, value):
+                self.value = value
+            def delete_password(self, service, account):
+                self.value = None
+        memory = MemoryBackend()
+        store = TMDBTokenStore(memory)
+        store.save("package-fixture-token")
+        if TMDBTokenStore(memory).load() != "package-fixture-token":
+            raise RuntimeError("Nieudana obsługa zapamiętywania tokenu.")
+        store.delete()
+        window = MainWindow(token_store=store)
         if window.windowIcon().isNull():
             raise RuntimeError("W pakiecie brakuje ikony aplikacji.")
         about = AboutDialog(window)
@@ -70,7 +89,7 @@ def run_self_test(output: Path) -> int:
             html = report.read_text(encoding="utf-8")
             if "Opis testowy." not in html or f"MovieCheck {__version__}" not in html:
                 raise RuntimeError("Nieprawidłowy szablon raportu w pakiecie.")
-        result.update(ok=True, icon=True, qt=True, sqlite=True, tls=True, parallel_cache=True, about=True, report=str(report), input=True)
+        result.update(ok=True, icon=True, qt=True, sqlite=True, tls=True, parallel_cache=True, about=True, credentials=True, report=str(report), input=True)
     except Exception as error:
         result["error"] = f"{type(error).__name__}: {error}"
     finally:

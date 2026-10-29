@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class MovieService:
     def __init__(self, cache, cancelled=lambda: False, status=lambda message: None):
         self.providers = [WebProvider("Filmweb", cache, cancelled), IMDbProvider(cache, cancelled, status)]
-        self.providers.append(TMDBProvider(cache, vars(cache).get("tmdb_credential", ""), cancelled))
+        self.providers.append(TMDBProvider(cache, vars(cache).get("tmdb_credential"), cancelled))
         self.batch_state = vars(cache).get("batch_state")
         self.cancelled = cancelled
         self.vod = FilmwebVod(cache, self.providers[0].fetch)

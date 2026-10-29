@@ -1,5 +1,29 @@
 # Dziennik interakcji i prac
 
+## 2026-10-29 — Zapamiętywanie tokenu TMDB, wersja 0.1.16
+
+### Polecenie użytkownika
+
+> zrób zapamietywanie tokenu API do tmdb.
+
+### Decyzje i wdrożenie
+
+- Przeczytano aktualne AGENTS.md, README i dziennik; użyto CodeGraph przed analizą okna i przepływu poświadczeń. Sprawdzono oficjalną dokumentację keyring i natywnych adapterów. Nie delegowano prac i nie odczytywano rzeczywistego tokenu użytkownika narzędziami.
+- Dodano zależność keyring>=25.6,<26 i moviecheck/credentials.py. Wybrano jawnie natywny adapter: Pęk kluczy na macOS, Menedżer poświadczeń Windows. Usługa MovieCheck.TMDB, konto api-token. Nie ma wyboru wtyczek ani awaryjnego zapisu w pliku tekstowym; sekret nie trafia do QSettings, SQLite, raportu czy logów.
+- Aplikacja wczytuje zapisany token podczas startu do maskowanego pola. Zmienne TMDB_READ_ACCESS_TOKEN i TMDB_API_KEY zachowują pierwszeństwo. „Zapisz token” zapisuje wpis; rozpoczęcie wyszukiwania automatycznie zapisuje nowy lub zmieniony token. „Usuń zapisany” usuwa wpis i czyści pole. Komunikaty stanu nie zawierają wartości sekretu.
+- Nieudany odczyt/zapis/usunięcie jest obsługiwany komunikatem pod polem. Nieudany zapis nie blokuje wyszukiwania z ręcznie wpisanym tokenem na tę sesję. Nieudane usunięcie nie czyści pola ani nie deklaruje sukcesu.
+- Rozróżniono brak przekazanej wartości (None: dotychczasowy odczyt środowiska w skryptach) od jawnego pustego pola (pusty string: TMDB wyłączone w tym wyszukiwaniu). Dzięki temu wyczyszczenie lub usunięcie tokenu w GUI nie jest cofane przez niejawny fallback do zmiennej środowiskowej. Usunięcie wpisu nie zmienia zmiennych środowiskowych systemu.
+- Zwiększono wersję dokładnie raz przez build.py bump: 0.1.15 → 0.1.16; data wydania 2026-10-29 zgodnie z kontekstem użytkownika. README opisuje obsługę, lokalizację wpisu, pierwszeństwo środowiska i aktualizację zależności ze źródeł.
+
+### Weryfikacja i ograniczenia
+
+- 115 testów przeszło w pełnej procedurze release. Nowe testy: zapis, ponowne utworzenie okna i odczyt, wymiana i usunięcie tokenu, automatyczny zapis przy wyszukiwaniu, dalsze wyszukiwanie po nieudanym zapisie, blokada magazynu, bezpieczne komunikaty, puste pole wyłączające TMDB mimo ustawionego środowiska. Testy GUI korzystają z osobnych atrap magazynu, bez dostępu do wpisu użytkownika.
+- Wykonano rzeczywisty zapis, odczyt z nowej instancji i usunięcie losowego testowego wpisu w natywnym magazynie Windows. Wpis miał unikalną nazwę MovieCheck.Test.<losowy identyfikator> i został usunięty w finally; wartości sekretu nie wypisywano. Nie zmieniano istniejącego wpisu MovieCheck.TMDB.
+- Test gotowego pakietu weryfikuje obecność i dostępność natywnego adaptera oraz przepływ zapisu/odczytu/usunięcia na izolowanym magazynie pamięciowym. Nie odczytuje danych użytkownika i nie wymaga dialogu dostępu do Pęku kluczy podczas budowania na macOS. Standardowy hook PyInstaller dołącza moduły i metadane keyring.
+- Zbudowano dist/releases/MovieCheck-0.1.16-windows-x64.exe wraz z manifestem i SHA-256. Gotowy EXE przeszedł test Qt, TLS, współbieżnej bazy, About, poświadczeń i HTML; wynik build/package/windows/smoke.json. Obejrzano podgląd Qt offscreen build/token-0.1.16.png z maskowanym fikcyjnym tokenem i nowymi przyciskami.
+- Na macOS nie uruchamiano nowego pakietu ani nie testowano rzeczywistego Pęku kluczy. System może poprosić użytkownika o dostęp aplikacji do magazynu. Iterację kończy lokalny commit dokumentacji, dziennika i kodu. Nie wysyłano commitów ani wydań do GitHub; pliki examples i .codegraph pozostają poza commitem.
+- Źródła: https://keyring.readthedocs.io/en/latest/, https://pypi.org/project/keyring/, https://github.com/jaraco/keyring/blob/main/keyring/backends/Windows.py, https://github.com/jaraco/keyring/blob/main/keyring/backends/macOS/__init__.py.
+
 ## 2026-10-28 — O programie, lokalizacje danych i diagnostyka awarii macOS, wersja 0.1.15
 
 ### Polecenie i pytania użytkownika
