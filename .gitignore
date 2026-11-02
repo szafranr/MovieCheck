@@ -15,3 +15,5 @@ examples/
 *.sqlite3-shm
 .env
 
+# CodeGraph – lokalny indeks agenta AI (per maszyna)
+.codegraph/
